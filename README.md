@@ -128,7 +128,7 @@ use Tomise\Barion\Support\BarionGateway;
 // Get payment gateway.
 $gateway = BarionGateway::createPaymentGateway();
 
-// Build barion payment data you models
+// Build barion payment data from your models
 $preparedPayment = $gateway->startPayment($order, $items);
 
 // Send data to Barion
@@ -150,7 +150,7 @@ $gateway = BarionGateway::createPaymentGateway();
 $preparedPayment = $gateway->startPayment($order, $items);
 $paymentDto = $preparedPayment->getPaymentDto();
 // Add billing address before send the request.
-$paymentDto->setBillingAddress();
+$paymentDto->setBillingAddress($address);
 // Send data to Barion
 $response = $preparedPayment->sendSinglePayment();
 ```
