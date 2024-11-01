@@ -23,7 +23,6 @@ class OrderController extends Controller
         // Build barion payment data you models
         $preparedPayment = $gateway->startPayment($order, $items);
         // Send data to Barion
-        $response = $preparedPayment->sendSinglePayment();
 
         return redirect($response->getGatewayUrl());
     }

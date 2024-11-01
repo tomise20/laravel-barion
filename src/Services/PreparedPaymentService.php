@@ -5,137 +5,85 @@ declare(strict_types=1);
 namespace Tomise\Barion\Services;
 
 use Tomise\Barion\Adapters\BarionAdapter;
-use Tomise\Barion\DataTransferObjects\AddressDto;
 use Tomise\Barion\DataTransferObjects\BarionPaymentDto;
-use Tomise\Barion\DataTransferObjects\Currency;
-use Tomise\Barion\DataTransferObjects\Locale;
 use Tomise\Barion\Enums\BarionGatewayEndpoint;
+use Tomise\Barion\Responses\BarionCommonPaymentResponse;
+use Tomise\Barion\Responses\BarionPaymentCompleteResponse;
 use Tomise\Barion\Responses\BarionPaymentResponse;
+use Tomise\Barion\Responses\BarionPaymentStatusResponse;
+use Tomise\Barion\Responses\BarionRefoundResponse;
 
 class PreparedPaymentService
 {
-    private BarionAdapter $adapter;
 
     public function __construct(
         private BarionPaymentDto $paymentDto,
+        private readonly BarionAdapter $adapter
     )
     {
-        $this->adapter = new BarionAdapter();
     }
 
     public function sendSinglePayment(): BarionPaymentResponse
     {
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::PaymentStart);
+        $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::PaymentStart);
+
+        return new BarionPaymentResponse($response);
     }
 
-    public function sendPaymentState(string $paymentId): BarionPaymentResponse
+    public function sendPaymentState(string $paymentId): BarionPaymentStatusResponse
     {
-        $path = BarionGatewayEndpoint::PaymentState->value;
-        $path = str_replace(':paymentId', $paymentId, $path);
+        $response = $this->adapter->sendGatewayRequest(
+            $this->paymentDto,
+            BarionGatewayEndpoint::PaymentState,
+            ['paymentId' => $paymentId]
+        );
 
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::PaymentState);
+        return BarionPaymentStatusResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function sendCompletePayment(): BarionPaymentResponse
+    public function sendCompletePayment(): BarionPaymentCompleteResponse
     {
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::Complete);
+        $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::Complete);
+
+        return BarionPaymentCompleteResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function sendFinishReservation(): BarionPaymentResponse
+    public function sendFinishReservation(): BarionCommonPaymentResponse
     {
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::FinishReservation);
+        $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::FinishReservation);
+
+        return BarionCommonPaymentResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function sendCapture(): BarionPaymentResponse
+    public function sendCapture(): BarionCommonPaymentResponse
     {
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::Capture);
+        $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::Capture);
+
+        return BarionCommonPaymentResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function sendCancelAuthorization(): BarionPaymentResponse
+    public function sendCancelAuthorization(): BarionCommonPaymentResponse
     {
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::CancelAuthorization);
+        $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::CancelAuthorization);
+
+        return BarionCommonPaymentResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function sendRefund(): BarionPaymentResponse
+    public function sendRefund(): BarionRefoundResponse
     {
-        return $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::Refound);
+        $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::Refound);
+
+        return BarionRefoundResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function setPaymentId(string $paymentId): self
+    public function getPaymentData(): BarionPaymentDto
     {
-        $this->paymentDto->setPaymentId($paymentId);
-
-        return $this;
+        return $this->paymentDto;
     }
 
-    public function getTransactions(): array
+    public function setPaymentData(BarionPaymentDto $paymentData): PreparedPaymentService
     {
-        return $this->paymentDto->getTransactions();
-    }
-
-    public function setTransactions(array $transactions): self
-    {
-        $this->paymentDto->setTransactions($transactions);
-
-        return $this;
-    }
-
-    public function getOrderNumber(): string
-    {
-        return $this->paymentDto->getOrderNumber();
-    }
-
-    public function setOrderNumber(string $orderNumber): self
-    {
-        $this->paymentDto->setOrderNumber($orderNumber);
-
-        return $this;
-    }
-
-    public function getLocale(): string
-    {
-        return $this->paymentDto->getLocale();
-    }
-
-    public function setLocale(Locale $locale): self
-    {
-        $this->paymentDto->setLocale($locale);
-
-        return $this;
-    }
-
-    public function getCurrency(): string
-    {
-        return $this->paymentDto->getCurrency();
-    }
-
-    public function setCurrency(Currency $currency): self
-    {
-        $this->paymentDto->setCurrency($currency);
-
-        return $this;
-    }
-
-    public function getPhoneNumber(): string
-    {
-        return $this->paymentDto->getPhoneNumber();
-    }
-
-    public function setPhoneNumber(string $phoneNumber): self
-    {
-        $this->paymentDto->setPhoneNumber($phoneNumber);
-
-        return $this;
-    }
-
-    public function getBillingAddress(): AddressDto
-    {
-        return $this->paymentDto->getBillingAddress();
-    }
-
-    public function setBillingAddress(AddressDto $billingAddress): self
-    {
-        $this->paymentDto->setBillingAddress($billingAddress);
+        $this->paymentDto = $paymentData;
 
         return $this;
     }

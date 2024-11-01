@@ -6,17 +6,15 @@ namespace Tomise\Barion\Adapters;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Contracts\Cache\Store;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Psr\Http\Message\ResponseInterface;
 use Tomise\Barion\DataTransferObjects\BarionPaymentDto;
 use Tomise\Barion\DataTransferObjects\BarionWalletDto;
 use Tomise\Barion\Enums\BarionGatewayEndpoint;
 use Tomise\Barion\Enums\BarionWalletEndpoint;
 use Tomise\Barion\Exceptions\BarionConnectionException;
 use Tomise\Barion\Exceptions\BarionPaymentException;
-use Tomise\Barion\Responses\BarionPaymentResponse;
-use Tomise\Barion\Responses\BarionWalletResponse;
 
 class BarionAdapter
 {
@@ -48,12 +46,18 @@ class BarionAdapter
         $this->checkConnection();
     }
 
-    public function sendGatewayRequest(BarionPaymentDto $paymentDto, BarionGatewayEndpoint $endpoint): BarionPaymentResponse
+    public function sendGatewayRequest(BarionPaymentDto $paymentDto, BarionGatewayEndpoint $endpoint, array $extras = null): ResponseInterface
     {
         $requestType = $this->getRequestType($endpoint);
+
+        if($endpoint === BarionGatewayEndpoint::PaymentState) {
+            $path = str_replace(':paymentId', $extras['paymentId'], $endpoint->value);
+        } else {
+            $path = $endpoint->value;
+        }
         
         try {
-            $rawResponse = $this->client->request($requestType, $endpoint->value, [
+            $rawResponse = $this->client->request($requestType, $path, [
                 'json' => $paymentDto->toArray(),
                 'headers' => [
                     'x-pos-key' => $paymentDto->getPosKey(),
@@ -61,16 +65,16 @@ class BarionAdapter
             ]);
         } catch(RequestException $e) {
             if($e->hasResponse()) {
-                return new BarionPaymentResponse($e->getResponse());
+                throw new BarionPaymentException('Request failed: '.$e->getMessage());
             }
 
             throw new BarionPaymentException($e->getMessage());
         }
 
-        return new BarionPaymentResponse($rawResponse);
+        return $rawResponse;
     }
 
-    public function sendWalletRequest(BarionWalletDto $walletDto, BarionWalletEndpoint $endpoint): BarionWalletResponse
+    public function sendWalletRequest(BarionWalletDto $walletDto, BarionWalletEndpoint $endpoint): ResponseInterface
     {
         $requestType = $this->getRequestType($endpoint);
         
@@ -83,13 +87,13 @@ class BarionAdapter
             ]);
         } catch(RequestException $e) {
             if($e->hasResponse()) {
-                return new BarionWalletResponse($e->getResponse());
+                throw new BarionPaymentException('Request failed: '.$e->getMessage());
             }
 
             throw new BarionPaymentException($e->getMessage());
         }
 
-        return new BarionWalletResponse($rawResponse);
+        return $rawResponse;
     }
 
     public function sendDownload(BarionWalletDto $walletDto): string

@@ -25,16 +25,21 @@ class OrderController extends Controller
         $gateway = BarionGateway::createPaymentGateway();
 
         /**
-         * Build barion payment data you models
          * The following properties automatic assigned: POSKey,PaymentType,
          * ReservationPeriod,PaymentWindow,GuestCheckOut,FundingSources,RedirectUrl,CallbackUrl
          */ 
         $preparedPayment = $gateway->startPaymentManual();
-        $preparedPayment->setPaymentId('TEST-01');
-        $preparedPayment->setTransactions([$this->createTransaction()]);
-        $preparedPayment->setOrderNumber('ORDER-01');
-        $preparedPayment->setLocale(Locale::Hu);
-        $preparedPayment->setCurrency(Currency::Huf);
+        $paymentDto = $preparedPayment->getPaymentData();
+        $paymentDto->setPaymentId('TEST-01');
+        $paymentDto->setTransactions([$this->createTransaction()]);
+        $paymentDto->setOrderNumber('ORDER-01');
+
+        // If you don't set the locale and currency, the default values will be used from config
+        $paymentDto->setLocale(Locale::Hu);
+        $paymentDto->setCurrency(Currency::Huf);
+
+        // This step is not necessary, because the paymentDto is a reference
+        $preparedPayment->setPaymentData($paymentDto);
 
         // Send data to Barion
         $response = $preparedPayment->sendSinglePayment();

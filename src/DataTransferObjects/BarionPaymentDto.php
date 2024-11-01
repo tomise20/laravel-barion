@@ -5,9 +5,9 @@ namespace Tomise\Barion\DataTransferObjects;
 use Illuminate\Contracts\Support\Arrayable;
 use Tomise\Barion\DataTransferObjects\Currency;
 use Tomise\Barion\DataTransferObjects\Locale;
+use Tomise\Barion\Enums\RecurrenceType;
 
 class BarionPaymentDto implements Arrayable {
-    private string $posKey;
     private string $paymentType;
     private string $reservationPeriod;
     private string $paymentWindow;
@@ -15,28 +15,31 @@ class BarionPaymentDto implements Arrayable {
     private array $fundingSources;
     private string $paymentRequestId;
     private ?string $payerHint = null;
+    private ?string $cardHolderNameHint = null;
+    private ?int $recurrenceType = null;
+    private ?string $traceId = null;
+    private ?AddressDto $shippingAddress = null;
     private string $redirectUrl;
     private string $callbackUrl;
     private array $transactions;
     private string $orderNumber;
     private Locale $locale;
     private Currency $currency;
+    private ?string $payerPhoneNumber = null;
+    private ?string $payerWorkPhoneNumber = null;
+    private ?string $payerHomePhoneNumber = null;
     private string $phoneNumber;
     private AddressDto $billingAddress;
 
     private ?string $paymentId = null;
 
+    public function __construct(private readonly string $posKey)
+    {
+    }
+
     public function getPosKey(): string
     {
         return $this->posKey;
-    }
-
-    public function setPosKey(string $posKey): BarionPaymentDto
-
-    {
-        $this->posKey = $posKey;
-
-        return $this;
     }
 
     public function getPaymentType(): string
@@ -245,6 +248,93 @@ class BarionPaymentDto implements Arrayable {
 
         return $this;
     }
+    
+    public function isGuestCheckOut(): bool
+    {
+        return $this->guestCheckOut;
+    }
+    
+    public function getCardHolderNameHint(): ?string
+    {
+        return $this->cardHolderNameHint;
+    }
+    
+    public function setCardHolderNameHint(?string $cardHolderNameHint): BarionPaymentDto
+    {
+        $this->cardHolderNameHint = $cardHolderNameHint;
+        return $this;
+    }
+    
+    public function getRecurrenceType(): ?int
+    {
+        return $this->recurrenceType;
+    }
+    
+    public function setRecurrenceType(int|RecurrenceType $recurrenceType): BarionPaymentDto
+    {
+        if($recurrenceType instanceof RecurrenceType) {
+            $recurrenceType = $recurrenceType->value;
+        } else {
+            $this->recurrenceType = $recurrenceType;
+        }
+
+        return $this;
+    }
+    
+    public function getTraceId(): ?string
+    {
+        return $this->traceId;
+    }
+    
+    public function setTraceId(?string $traceId): BarionPaymentDto
+    {
+        $this->traceId = $traceId;
+        return $this;
+    }
+    
+    public function getShippingAddress(): ?AddressDto
+    {
+        return $this->shippingAddress;
+    }
+    
+    public function setShippingAddress(?AddressDto $shippingAddress): BarionPaymentDto
+    {
+        $this->shippingAddress = $shippingAddress;
+        return $this;
+    }
+    
+    public function getPayerPhoneNumber(): ?string
+    {
+        return $this->payerPhoneNumber;
+    }
+    
+    public function setPayerPhoneNumber(?string $payerPhoneNumber): BarionPaymentDto
+    {
+        $this->payerPhoneNumber = $payerPhoneNumber;
+        return $this;
+    }
+    
+    public function getPayerWorkPhoneNumber(): ?string
+    {
+        return $this->payerWorkPhoneNumber;
+    }
+    
+    public function setPayerWorkPhoneNumber(?string $payerWorkPhoneNumber): BarionPaymentDto
+    {
+        $this->payerWorkPhoneNumber = $payerWorkPhoneNumber;
+        return $this;
+    }
+    
+    public function getPayerHomePhoneNumber(): ?string
+    {
+        return $this->payerHomePhoneNumber;
+    }
+    
+    public function setPayerHomePhoneNumber(?string $payerHomePhoneNumber): BarionPaymentDto
+    {
+        $this->payerHomePhoneNumber = $payerHomePhoneNumber;
+        return $this;
+    }
 
     public function toArray(): array
     {
@@ -252,6 +342,8 @@ class BarionPaymentDto implements Arrayable {
         foreach ($this as $key => $value) {
             if (is_object($value) && method_exists($value, 'toArray')) {
                 $result[$key] = $value->toArray();
+            } elseif (is_array($value)) {
+                $result[$key] = array_map(fn($item) => method_exists($item, 'toArray') ? $item->toArray() : $item, $value);
             } elseif (is_object($value) && method_exists($value, 'getValue')) {
                 $result[$key] = $value->getValue();
             } else {
@@ -261,4 +353,5 @@ class BarionPaymentDto implements Arrayable {
         
         return $result;
     }
+
 }

@@ -10,6 +10,9 @@ class AddressDto implements Arrayable {
     private string $city;
     private string $postalCode;
     private string $street;
+    private ?string $street2 = null;
+    private ?string $street3 = null;
+    private ?string $fullName = null;
 
     public function getCountry(): string
     {
@@ -71,13 +74,63 @@ class AddressDto implements Arrayable {
         return $this;
     }
 
+    public function getStreet2(): ?string
+    {
+        return $this->street2;
+    }
+
+    public function setStreet2(?string $street2): AddressDto
+    {
+        $this->street2 = $street2;
+
+        return $this;
+    }
+
+    public function getStreet3(): ?string
+    {
+        return $this->street3;
+    }
+
+    public function setStreet3(?string $street3): AddressDto
+    {
+        $this->street3 = $street3;
+
+        return $this;
+    }
+
+    public function getFullName(): ?string
+    {
+        return $this->fullName;
+    }
+
+    public function setFullName(?string $fullName): AddressDto
+    {
+        $this->fullName = $fullName;
+
+        return $this;
+    }
+
     public function toArray(): array
     {
-        return [
+        $value = [
             'Country' => $this->country,
             'City' => $this->city,
             'Zip' => $this->postalCode,
-            'Street' => $this->street
+            'Street' => $this->street,
         ];
+
+        if($this->street2) {
+            $value['Street2'] = $this->street2;
+        }
+
+        if($this->street3) {
+            $value['Street3'] = $this->street3;
+        }
+
+        if($this->fullName) {
+            $value['FullName'] = $this->fullName;
+        }
+
+        return $value;
     }
 }

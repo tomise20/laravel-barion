@@ -14,20 +14,8 @@ enum BarionStatus: string {
     case Canceled = 'Canceled';
     case Succeeded = 'Succeeded';
     case Failed = 'Failed';
-
-	public function getStatusName(BarionStatus $status): string
-	{
-		return match (true) {
-			$status === BarionStatus::Prepared => 'Folyamatban',
-			$status === BarionStatus::Started => 'Elkezdődott',
-			$status === BarionStatus::InProgress => 'Folymatban',
-			$status === BarionStatus::Waiting => 'Várakozás',
-			$status === BarionStatus::Canceled => 'Visszavonva',
-			$status === BarionStatus::Succeeded => 'Sikeres fizetés',
-			$status === BarionStatus::Failed => 'Sikertelen fizetés',
-			default => 'Ismertlen státusz',
-		};
-	}
+    case Expired = 'Expired';
+    case PartiallySucceeded = 'PartiallySucceeded';
 
     public function isSuccess(): bool
     {

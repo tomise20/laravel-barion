@@ -48,7 +48,7 @@ class BarionParamsBuilder
 
     public function build(): BarionPaymentDto
     {
-        $barionData = new BarionPaymentDto();
+        $barionData = new BarionPaymentDto($this->configData['posKey']);
         $barionData->setLocale($this->getLocale());
         $barionData->setCurrency($this->getCurrency());
 
@@ -63,7 +63,9 @@ class BarionParamsBuilder
 
     public function buildManual(): BarionPaymentDto
     {
-        $barionData = new BarionPaymentDto();
+        $barionData = new BarionPaymentDto($this->configData['posKey']);
+		$barionData->setLocale($this->getLocale());
+        $barionData->setCurrency($this->getCurrency());
 
         $this->setConfigData($barionData);
 
@@ -72,13 +74,18 @@ class BarionParamsBuilder
 
     private function setConfigData(BarionPaymentDto $barionData): void
     {
-        $barionData->setPosKey($this->configData['posKey']);
         $barionData->setPaymentType($this->configData['paymentType']);
         $barionData->setPaymentWindow($this->configData['paymentWindow']);
         $barionData->setGuestCheckout($this->configData['guestCheckout']);
         $barionData->setFundingSources($this->configData['fundingSources']);
-        $barionData->setRedirectUrl($this->configData['redirectUrl']);
-        $barionData->setCallbackUrl($this->configData['callbackUrl']);
+
+        if(Arr::get($this->configData, 'redirectUrl')) {
+            $barionData->setRedirectUrl($this->configData['redirectUrl']);
+        }
+
+        if(Arr::get($this->configData, 'callbackUrl')) {
+            $barionData->setCallbackUrl($this->configData['callbackUrl']);
+        }
     }
 
 	/**
@@ -135,7 +142,7 @@ class BarionParamsBuilder
             $barionItem = new TransactionItemDto();
             foreach($item->barion_casts as $key => $value) {
                 $setter = "set".ucfirst(Str::camel($key));
-                $barionItem->$setter($item->$value);    
+                $barionItem->$setter($item->$value);
             }
 
             $items->push($barionItem);
