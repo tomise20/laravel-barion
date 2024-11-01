@@ -2,6 +2,8 @@
 
 ### **Connect your webshop to the Barion Smart Gateway in just 5 minutes.**
 
+### **Development currently in progress!**
+
 Tomise/Laravel-Barion is provides an easy way to use the Barion API with Laravel applications.Support Barion Smart Gateway operation and Barion Wallet operations.
 
 ## Installation
