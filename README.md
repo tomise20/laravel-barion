@@ -61,7 +61,7 @@ If you want to use Barion with your models only needs some simple step:
 
 1. Add `public $barion_casts = []` you Order or Cart or any class that extends from Model.
 
-   1. Required keys: payment_request_id, payer_hint, payer_hint, order_number, phone_number, total
+   1. Required keys: payment_request_id, payer_hint, order_number, phone_number, total
 
 Example
 

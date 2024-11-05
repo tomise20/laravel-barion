@@ -18,8 +18,6 @@ class OrderController extends Controller
     {
         // Your order
         $order = Order::find(1);
-        // Your order items
-        $items = $order->items;
 
         // Get payment gateway.
         $gateway = BarionGateway::createPaymentGateway();

@@ -10,7 +10,7 @@ class BarionWalletDto implements Arrayable
 {
     private string $apiKey;
 
-    private string $lastVisibleItemId = null;
+    private ?string $lastVisibleItemId = null;
     private mixed $lastRequestTime = null;
     private ?int $limit = null;
 
@@ -173,9 +173,11 @@ class BarionWalletDto implements Arrayable
         foreach ($this as $key => $value) {
             if (is_object($value) && method_exists($value, 'toArray')) {
                 $result[$key] = $value->toArray();
+            } elseif (is_array($value)) {
+                $result[$key] = array_map(fn($item) => method_exists($item, 'toArray') ? $item->toArray() : $item, $value);
             } elseif (is_object($value) && method_exists($value, 'getValue')) {
                 $result[$key] = $value->getValue();
-            } else {
+            } else if($value !== null) {
                 $result[$key] = $value;
             }
         }

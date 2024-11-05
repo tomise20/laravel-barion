@@ -1,7 +1,7 @@
 {
   "name": "tomise/laravel-barion",
   "description": "A simple Laravel package for Barion payment gateway",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "type": "library",
   "license": "MIT",
   "authors": [

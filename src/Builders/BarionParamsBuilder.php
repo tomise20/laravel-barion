@@ -146,7 +146,6 @@ class BarionParamsBuilder
             }
 
             $items->push($barionItem);
-
         }
 
 		return $items;

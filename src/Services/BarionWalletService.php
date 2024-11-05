@@ -7,6 +7,8 @@ namespace Tomise\Barion\Services;
 use Tomise\Barion\Adapters\BarionAdapter;
 use Tomise\Barion\DataTransferObjects\BarionWalletDto;
 use Tomise\Barion\Enums\BarionWalletEndpoint;
+use Tomise\Barion\Responses\BarionAccountResponse;
+use Tomise\Barion\Responses\BarionHistoryResponse;
 use Tomise\Barion\Responses\BarionWalletResponse;
 
 class BarionWalletService
@@ -18,17 +20,21 @@ class BarionWalletService
         $this->adapter = new BarionAdapter();
     }
 
-    public function getAccounts(): BarionWalletResponse
+    public function getAccounts(): BarionAccountResponse
     {
-        return $this->adapter->sendWalletRequest($this->walletDto, BarionWalletEndpoint::Accounts);
+        $response = $this->adapter->sendWalletRequest($this->walletDto, BarionWalletEndpoint::Accounts);
+
+        return BarionAccountResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function getHistory(): BarionWalletResponse
+    public function getHistory(): BarionHistoryResponse
     {
-        return $this->adapter->sendWalletRequest($this->walletDto, BarionWalletEndpoint::GetHistory);
+        $response = $this->adapter->sendWalletRequest($this->walletDto, BarionWalletEndpoint::GetHistory);
+
+        return BarionHistoryResponse::createFromArray(json_decode($response->getBody()->getContents(), true));
     }
 
-    public function bankTransfer(): BarionWalletResponse
+    public function bankTransfer(): mixed
     {
         return $this->adapter->sendWalletRequest($this->walletDto, BarionWalletEndpoint::Withdraw);
     }
@@ -38,7 +44,7 @@ class BarionWalletService
         return $this->adapter->sendDownload($this->walletDto);
     }
 
-    public function sendMoney(): BarionWalletResponse
+    public function sendMoney(): mixed
     {
         return $this->adapter->sendWalletRequest($this->walletDto, BarionWalletEndpoint::SendMoney);
     }

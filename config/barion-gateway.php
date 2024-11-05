@@ -29,4 +29,7 @@ return [
 
     'locale' => 'hu-HU',
     'currency' => 'HUF',
+
+    // If you want to sync the payment request with the order number, set to true
+    'sync_payment_request_id' => false,
 ];

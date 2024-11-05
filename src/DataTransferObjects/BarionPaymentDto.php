@@ -30,6 +30,7 @@ class BarionPaymentDto implements Arrayable {
     private ?string $payerHomePhoneNumber = null;
     private string $phoneNumber;
     private AddressDto $billingAddress;
+    private ?PurchaseInformation $purchaseInformation = null;
 
     private ?string $paymentId = null;
 
@@ -182,6 +183,10 @@ class BarionPaymentDto implements Arrayable {
     {
         $this->orderNumber = $orderNumber;
 
+        if(config('barion-gateway.sync_payment_request_id')) {
+            $this->setPaymentRequestId($orderNumber);
+        }
+
         return $this;
     }
 
@@ -262,6 +267,7 @@ class BarionPaymentDto implements Arrayable {
     public function setCardHolderNameHint(?string $cardHolderNameHint): BarionPaymentDto
     {
         $this->cardHolderNameHint = $cardHolderNameHint;
+        
         return $this;
     }
     
@@ -289,6 +295,7 @@ class BarionPaymentDto implements Arrayable {
     public function setTraceId(?string $traceId): BarionPaymentDto
     {
         $this->traceId = $traceId;
+
         return $this;
     }
     
@@ -300,6 +307,7 @@ class BarionPaymentDto implements Arrayable {
     public function setShippingAddress(?AddressDto $shippingAddress): BarionPaymentDto
     {
         $this->shippingAddress = $shippingAddress;
+
         return $this;
     }
     
@@ -311,6 +319,7 @@ class BarionPaymentDto implements Arrayable {
     public function setPayerPhoneNumber(?string $payerPhoneNumber): BarionPaymentDto
     {
         $this->payerPhoneNumber = $payerPhoneNumber;
+
         return $this;
     }
     
@@ -322,6 +331,7 @@ class BarionPaymentDto implements Arrayable {
     public function setPayerWorkPhoneNumber(?string $payerWorkPhoneNumber): BarionPaymentDto
     {
         $this->payerWorkPhoneNumber = $payerWorkPhoneNumber;
+
         return $this;
     }
     
@@ -333,6 +343,19 @@ class BarionPaymentDto implements Arrayable {
     public function setPayerHomePhoneNumber(?string $payerHomePhoneNumber): BarionPaymentDto
     {
         $this->payerHomePhoneNumber = $payerHomePhoneNumber;
+
+        return $this;
+    }
+
+    public function getPurchaseInformation(): PurchaseInformation
+    {
+        return $this->purchaseInformation;
+    }
+
+    public function setPurchaseInformation(PurchaseInformation $purchaseInformation): BarionPaymentDto
+    {
+        $this->purchaseInformation = $purchaseInformation;
+
         return $this;
     }
 
@@ -346,7 +369,7 @@ class BarionPaymentDto implements Arrayable {
                 $result[$key] = array_map(fn($item) => method_exists($item, 'toArray') ? $item->toArray() : $item, $value);
             } elseif (is_object($value) && method_exists($value, 'getValue')) {
                 $result[$key] = $value->getValue();
-            } else {
+            } elseif($value !== null) {
                 $result[$key] = $value;
             }
         }
