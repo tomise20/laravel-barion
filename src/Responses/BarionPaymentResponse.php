@@ -2,7 +2,7 @@
 
 namespace Tomise\Barion\Responses;
 
-use Psr\Http\Message\ResponseInterface;
+use Tomise\Barion\Attributes\MapTo;
 use Tomise\Barion\Contracts\PaymentResponse;
 use Tomise\Barion\Enums\BarionStatus;
 
@@ -10,6 +10,8 @@ class BarionPaymentResponse implements PaymentResponse
 {
     public readonly bool $isSuccess;
     public readonly string $currency;
+
+    #[MapTo(BarionStatus::class)]
     public readonly BarionStatus $status;
 
     private ?string $paymentId = null;
@@ -21,12 +23,10 @@ class BarionPaymentResponse implements PaymentResponse
 
     private ?array $error = null;
 
-    public function __construct(ResponseInterface $response)
+    public function __construct(array $response)
     {
-        $responseBody = json_decode($response->getBody()->getContents(), true);
-
-        $this->checkIsSuccess($responseBody);
-        $this->convertResponse($responseBody);
+        $this->checkIsSuccess($response);
+        $this->convertResponse($response);
     }
 
     private function convertResponse(array $response): void

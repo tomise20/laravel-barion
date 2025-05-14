@@ -2,10 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Tomise\Barion\DataTransferObjects;
+namespace Tomise\Barion\DataTransferObjects\Response;
+
+use Tomise\Barion\Traits\Arrayable;
+
 
 class HistoryDto
 {
+
+    use Arrayable;
+
     public string $id;
     public string $historyType;
     public string $happenedAtUtc;

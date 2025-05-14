@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tomise\Barion\Responses;
 
 use Illuminate\Support\Collection;
-use Tomise\Barion\DataTransferObjects\AccountDto;
+use Tomise\Barion\DataTransferObjects\Response\AccountDto;
 use Tomise\Barion\Utils\TransformHelper;
 
 class BarionAccountResponse

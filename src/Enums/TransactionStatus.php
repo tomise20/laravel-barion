@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Enums;
 
-enum TransactionStatus: int {
+enum TransactionStatus: string {
     case Prepared = 'Prepared';
     case Started = 'Started';
     case Succeeded = 'Succeeded';

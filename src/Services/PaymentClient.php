@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Services;
 
+use RuntimeException;
 use Tomise\Barion\Adapters\BarionAdapter;
 use Tomise\Barion\DataTransferObjects\BarionPaymentDto;
 use Tomise\Barion\Enums\BarionGatewayEndpoint;
@@ -13,21 +14,21 @@ use Tomise\Barion\Responses\BarionPaymentResponse;
 use Tomise\Barion\Responses\BarionPaymentStatusResponse;
 use Tomise\Barion\Responses\BarionRefoundResponse;
 
-class PreparedPaymentService
+class PaymentClient
 {
-
     public function __construct(
         private BarionPaymentDto $paymentDto,
         private readonly BarionAdapter $adapter
     )
     {
+        $this->checkCredentials();
     }
 
     public function sendSinglePayment(): BarionPaymentResponse
     {
         $response = $this->adapter->sendGatewayRequest($this->paymentDto, BarionGatewayEndpoint::PaymentStart);
 
-        return new BarionPaymentResponse($response);
+        return new BarionPaymentResponse(json_decode($response->getBody()->getContents(), true));
     }
 
     public function sendPaymentState(string $paymentId): BarionPaymentStatusResponse
@@ -81,10 +82,17 @@ class PreparedPaymentService
         return $this->paymentDto;
     }
 
-    public function setPaymentData(BarionPaymentDto $paymentData): PreparedPaymentService
+    public function setPaymentData(BarionPaymentDto $paymentData): PaymentClient
     {
         $this->paymentDto = $paymentData;
 
         return $this;
+    }
+
+    private function checkCredentials(): void
+    {
+        if($this->paymentDto->getPosKey() === '') {
+            throw new RuntimeException('Invalid configuration provided. Please provide a valid POSKey!');
+        }
     }
 }

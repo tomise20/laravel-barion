@@ -6,14 +6,14 @@ namespace Tomise\Barion\Contracts;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Tomise\Barion\Services\PreparedPaymentService;
+use Tomise\Barion\Services\PaymentClient;
 
 interface IBarionPaymentService
 {
     public function startPayment(
         Collection|Model $order,
         Collection $items,
-    ): PreparedPaymentService;
+    ): PaymentClient;
 
-    public function startPaymentManual(): PreparedPaymentService;
+    public function startPaymentManual(): PaymentClient;
 }

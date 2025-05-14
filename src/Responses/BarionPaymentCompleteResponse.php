@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Responses;
 
+use Tomise\Barion\Attributes\MapTo;
 use Tomise\Barion\Enums\BarionStatus;
 use Tomise\Barion\Utils\TransformHelper;
 
 class BarionPaymentCompleteResponse {
     public string $paymentId;
     public string $paymentRequestId;
+
+    #[MapTo(BarionStatus::class)]
     public BarionStatus $status;
+    
     public bool $isSuccessful;
     public ?string $traceId = null;
 

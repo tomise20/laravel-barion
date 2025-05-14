@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\DataTransferObjects;
 
-use Illuminate\Contracts\Support\Arrayable;
+use Tomise\Barion\Traits\Arrayable;
+use Tomise\Barion\Traits\HasSetter;
 
-class RecipientDto implements Arrayable
+
+/**
+ * @method self setName(string $name)
+ * @method self setAddress(\Tomise\Barion\DataTransferObjects\AddressDto $address)
+ */
+class RecipientDto
 {
+
+    use Arrayable, HasSetter;
+
     public string $name;
     public AddressDto $address;
-
-    public function toArray(): array
-    {
-        return [
-            'Name' => $this->name,
-            'Address' => $this->address->toArray(),
-        ];
-    }
 }

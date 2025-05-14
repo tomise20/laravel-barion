@@ -1,113 +1,37 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tomise\Barion\DataTransferObjects;
 
-use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Traits\Macroable;
+use Tomise\Barion\Traits\Arrayable;
+use Tomise\Barion\Traits\HasSetter;
 
-class TransactionItemDto implements Arrayable
+
+/**
+ * @method self setName(string $name)
+ * @method self setDescription(string $description)
+ * @method self setQuantity(int $quantity)
+ * @method self setUnit(string $unit)
+ * @method self setUnitPrice(float $unitPrice)
+ * @method self setItemTotal(float $itemTotal)
+ * @method self setImageUrl(string $imageUrl)
+ */
+class TransactionItemDto
 {
-    private string $name;
-    private string $description;
-    private int $quantity;
-    private string $unit = 'db';
-    private float $unitPrice;
-    private float $itemTotal;
-    private ?string $imageUrl = null;
+    use Macroable, Arrayable, HasSetter;
 
-    public function getName(): string
-    {
-        return $this->name;
-    }
+	public function __construct()
+	{
+		self::bootHasSetters();
+	}
 
-    public function setName(string $name): TransactionItemDto
-    {
-        $this->name = $name;
-
-        return $this;
-    }
-
-    public function getDescription(): string
-    {
-        return $this->description;
-    }
-
-    public function setDescription(string $description): TransactionItemDto
-    {
-        $this->description = $description;
-
-        return $this;
-    }
-
-    public function getImageUrl(): string
-    {
-        return $this->imageUrl;
-    }
-
-    public function setImageUrl(string $url): TransactionItemDto
-    {
-        $this->imageUrl = $url;
-
-        return $this;
-    }
-
-    public function getQuantity(): int
-    {
-        return $this->quantity;
-    }
-
-    public function setQuantity(int $qty): TransactionItemDto
-    {
-        $this->quantity = $qty;
-
-        return $this;
-    }
-
-    public function getUnit(): string
-    {
-        return $this->unit;
-    }
-
-    public function setUnit(string $unit): TransactionItemDto
-    {
-        $this->unit = $unit;
-
-        return $this;
-    }
-
-    public function getUnitPrice(): float
-    {
-        return $this->unitPrice;
-    }
-
-    public function setUnitPrice(float $unitPrice): TransactionItemDto
-    {
-        $this->unitPrice = $unitPrice;
-
-        return $this;
-    }
-
-    public function getItemTotal(): float
-    {
-        return $this->itemTotal;
-    }
-
-    public function setItemTotal(float $itemTotal): TransactionItemDto
-    {
-        $this->itemTotal = $itemTotal;
-
-        return $this;
-    }
-
-	public function toArray(): array
-    {
-        return [
-            'Name' => $this->name,
-            'Description' => $this->description,
-            'ImageUrl' => $this->imageUrl,
-            'Quantity' => $this->quantity,
-            'Unit' => $this->unit,
-            'UnitPrice' => $this->unitPrice,
-            'ItemTotal' => $this->itemTotal
-        ];
-    }
+    public string $name;
+    public string $description;
+    public int $quantity;
+    public string $unit = 'db';
+    public float $unitPrice;
+    public float $itemTotal;
+    public ?string $imageUrl = null;
 }

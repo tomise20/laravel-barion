@@ -29,7 +29,7 @@ class BarionPaymentService extends AbstractBarionService implements IBarionPayme
     public function startPayment(
         Collection|Model $order,
         Collection $items,
-    ): PreparedPaymentService
+    ): PaymentClient
     {
         $this->checkModelBarionProperty($order);
 
@@ -38,13 +38,13 @@ class BarionPaymentService extends AbstractBarionService implements IBarionPayme
             ->setItems($items)
             ->build();
 
-        return new PreparedPaymentService($paymentData, $this->adapter);
+        return new PaymentClient($paymentData, $this->adapter);
     }
 
-    public function startPaymentManual(): PreparedPaymentService
+    public function startPaymentManual(): PaymentClient
     {
         $paymentData = (new BarionParamsBuilder())->buildManual();
 
-        return new PreparedPaymentService($paymentData, $this->adapter);
+        return new PaymentClient($paymentData, $this->adapter);
     }    
 }

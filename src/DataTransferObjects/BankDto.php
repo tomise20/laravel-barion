@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\DataTransferObjects;
 
-use Illuminate\Contracts\Support\Arrayable;
+use Tomise\Barion\Traits\Arrayable;
+use Tomise\Barion\Traits\HasSetter;
 
-class BankDto implements Arrayable
+
+/**
+ * @method self setSwiftCode(string $swiftCode)
+ */
+class BankDto
 {
-    public string $swiftCode;
+    use Arrayable, HasSetter;
 
-    public function toArray(): array
-    {
-        return [
-            'SwiftCode' => $this->swiftCode,
-        ];
-    }
+    public string $swiftCode;
 }

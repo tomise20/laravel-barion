@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace Tomise\Barion\Responses;
 
 use Psr\Http\Message\ResponseInterface;
-use Tomise\Barion\DataTransferObjects\AccountDto;
-use Tomise\Barion\DataTransferObjects\HistoryDto;
+use Tomise\Barion\Attributes\MapTo;
+use Tomise\Barion\DataTransferObjects\Response\AccountDto;
+use Tomise\Barion\DataTransferObjects\Response\HistoryDto;
 
 class BarionWalletResponse
 {
     public bool $isSuccess;
     public array $error;
 
+    #[MapTo(AccountDto::class)]
     private ?AccountDto $account = null;
+
+    #[MapTo(HistoryDto::class)]
     private ?HistoryDto $history = null;
 
     public function __construct(ResponseInterface $response)

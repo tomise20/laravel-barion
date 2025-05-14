@@ -54,7 +54,7 @@ class BarionParamsBuilder
 
         $this->setConfigData($barionData);
 
-        $this->setDataFromModel($barionData);
+        $this->setDataFromOrder($barionData);
 
         $this->setTransactions($barionData);
 
@@ -96,7 +96,7 @@ class BarionParamsBuilder
         $this->configData = config("barion-gateway");
     }
 
-    private function setDataFromModel(BarionPaymentDto $barionData): void
+    private function setDataFromOrder(BarionPaymentDto $barionData): void
     {
         $baseDataKeys = ['payment_request_id', 'payer_hint', 'order_number', 'phone_number'];
 
@@ -164,6 +164,9 @@ class BarionParamsBuilder
 
 	/**
 	 * @return Locale
+     * 
+     * @throws TypeError
+     * @throws ValueError
 	 */
     private function getLocale(): Locale
     {
@@ -175,11 +178,14 @@ class BarionParamsBuilder
         }
 
 
-		return Locale::tryFrom($locale);
+		return Locale::from($locale);
     }
 
 	/**
 	 * @return Currency
+     * 
+     * @throws TypeError
+     * @throws ValueError
 	 */
     private function getCurrency(): Currency
     {
@@ -189,6 +195,6 @@ class BarionParamsBuilder
             throw new BarionPaymentException('Currency is not settings!');
         }
 
-        return Currency::tryFrom($currency);
+        return Currency::from($currency);
     }
 }

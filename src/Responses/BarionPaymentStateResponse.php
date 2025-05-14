@@ -3,15 +3,18 @@
 namespace Tomise\Barion\Responses;
 
 use Psr\Http\Message\ResponseInterface;
+use Tomise\Barion\Attributes\MapTo;
 use Tomise\Barion\Enums\BarionStatus;
 
 class BarionPaymentStateResponse
 {
     public readonly bool $isSuccess;
     public readonly string $currency;
-    public readonly BarionStatus $status;
-    public readonly string $completedAt;
 
+    #[MapTo(BarionStatus::class)]
+    public readonly BarionStatus $status;
+
+    public readonly string $completedAt;
     private string $paymentId;
     private string $paymentRequestId;
     private string $transactionId;

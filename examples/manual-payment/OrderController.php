@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
+use Tomise\Barion\DataTransferObjects\BarionPaymentDto;
 use Tomise\Barion\DataTransferObjects\Currency;
 use Tomise\Barion\DataTransferObjects\Locale;
 use Tomise\Barion\Support\BarionGateway;
@@ -16,18 +16,21 @@ class OrderController extends Controller
 {
     public function createOrder()
     {
-        // Your order
-        $order = Order::find(1);
 
         // Get payment gateway.
         $gateway = BarionGateway::createPaymentGateway();
 
         /**
          * The following properties automatic assigned: POSKey,PaymentType,
-         * ReservationPeriod,PaymentWindow,GuestCheckOut,FundingSources,RedirectUrl,CallbackUrl
+         * ReservationPeriod,PaymentWindow,GuestCheckOut,FundingSources, (RedirectUrl,CallbackUrl if configured in the config file)
          */ 
         $preparedPayment = $gateway->startPaymentManual();
+        
+        // Get the payment data with default data
         $paymentDto = $preparedPayment->getPaymentData();
+        // or create a brand new paymentDto, but in this case you have to set every data! (not recommended)
+        $paymentDto = new BarionPaymentDto('EXAMPLE232');
+
         $paymentDto->setPaymentId('TEST-01');
         $paymentDto->setTransactions([$this->createTransaction()]);
         $paymentDto->setOrderNumber('ORDER-01');

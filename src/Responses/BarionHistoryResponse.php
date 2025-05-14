@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Responses;
 
-use Tomise\Barion\DataTransferObjects\UserHistoryParticipantDto;
+use Tomise\Barion\Attributes\MapTo;
+use Tomise\Barion\DataTransferObjects\Response\UserHistoryParticipantDto;
 use Tomise\Barion\Utils\TransformHelper;
 
 class BarionHistoryResponse {
@@ -12,8 +13,13 @@ class BarionHistoryResponse {
     public string $historyType;
     public string $happenedAtUtc;
     public int $concurrencyOrder;
+
+    #[MapTo(UserHistoryParticipantDto::class)]
     public UserHistoryParticipantDto $sourceAccount;
+
+    #[MapTo(UserHistoryParticipantDto::class)]
     public UserHistoryParticipantDto $targetAccount;
+    
     public float $amount;
     public string $currency;
     public string $description;

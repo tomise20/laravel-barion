@@ -4,8 +4,6 @@
  * More information about the available options can be found at: https://docs.barion.com/Main_Page
  */
 
-use Illuminate\Support\Facades\Storage;
-
 return [
 
     /** Available environments: test, prod */

@@ -4,20 +4,21 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\DataTransferObjects;
 
-use Illuminate\Contracts\Support\Arrayable;
+use Tomise\Barion\Traits\Arrayable;
+use Tomise\Barion\Traits\HasSetter;
 
-class BankAccountDto implements Arrayable
+
+/**
+ * @method self setCountry(string $country)
+ * @method self setFormat(int $format)
+ * @method self setAccountNumber(string $accountNumber)
+ */
+class BankAccountDto
 {
+
+    use Arrayable, HasSetter;
+
     public string $country;
     public int $format;
     public string $accountNumber;
-
-    public function toArray(): array
-    {
-        return [
-            'Country' => $this->country,
-            'Format' => $this->format,
-            'AccountNumber' => $this->accountNumber,
-        ];
-    }
 }
