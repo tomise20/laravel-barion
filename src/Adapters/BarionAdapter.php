@@ -55,7 +55,7 @@ class BarionAdapter
         } else {
             $path = $endpoint->value;
         }
-        
+
         try {
             $rawResponse = $this->client->request($requestType, $path, [
                 'json' => $paymentDto->toArray(),
@@ -77,7 +77,7 @@ class BarionAdapter
     public function sendWalletRequest(BarionWalletDto $walletDto, BarionWalletEndpoint $endpoint): ResponseInterface
     {
         $requestType = $this->getRequestType($endpoint);
-        
+
         try {
             $rawResponse = $this->client->request($requestType, $endpoint->value, [
                 'json' => $walletDto->toArray(),
