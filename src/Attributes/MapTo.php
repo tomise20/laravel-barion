@@ -7,6 +7,9 @@ namespace Tomise\Barion\Attributes;
 use Attribute;
 use InvalidArgumentException;
 
+/**
+ * Maps a raw response value to an enum (unknown values become null), an object or a scalar type.
+ */
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class MapTo
 {
@@ -14,30 +17,26 @@ class MapTo
 
     public function process(mixed $rawValue): mixed
     {
-        if (is_null($rawValue)) {
+        if ($rawValue === null) {
             return null;
         }
-        
+
         if (enum_exists($this->type)) {
-            if (method_exists($this->type, 'tryFrom')) {
-                $enumValue = $this->type::tryFrom($rawValue);
-                if ($enumValue === null) {
-                    throw new InvalidArgumentException("Invalid value '{$rawValue}' for enum '{$this->type}'.");
-                }
-                return $enumValue;
-            }
-            throw new InvalidArgumentException("The enum type {$this->type} does not support tryFrom.");
+            // A value Barion adds later must not break the whole response.
+            return $this->type::tryFrom($rawValue);
         }
 
         if (class_exists($this->type)) {
-            if (method_exists($this->type, 'createFromArray')) {
-                return $this->type::createFromArray($rawValue);
-            }
-            return new $this->type($rawValue);
+            return match (true) {
+                method_exists($this->type, 'createFromArray') => $this->type::createFromArray($rawValue),
+                method_exists($this->type, 'fromArray') => $this->type::fromArray($rawValue),
+                default => new $this->type($rawValue),
+            };
         }
 
         if (in_array($this->type, ['int', 'float', 'string', 'bool'], true)) {
             settype($rawValue, $this->type);
+
             return $rawValue;
         }
 

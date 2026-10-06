@@ -1,83 +1,112 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tomise\Barion\Responses;
 
-use Tomise\Barion\Attributes\MapTo;
+use Illuminate\Support\Collection;
+use Tomise\Barion\Adapters\BarionAdapter;
 use Tomise\Barion\Contracts\PaymentResponse;
+use Tomise\Barion\DataTransferObjects\Response\ProcessedTransactionDto;
 use Tomise\Barion\Enums\BarionStatus;
 
+/**
+ * Response of Payment/Start. Errors are thrown as BarionPaymentException by the adapter, so a response object is
+ * always a started payment.
+ */
 class BarionPaymentResponse implements PaymentResponse
 {
     public readonly bool $isSuccess;
-    public readonly string $currency;
+    public readonly ?string $currency;
+    public readonly ?BarionStatus $status;
 
-    #[MapTo(BarionStatus::class)]
-    public readonly BarionStatus $status;
+    private ?string $paymentId;
+    private ?string $paymentRequestId;
+    private ?string $transactionId;
+    private ?string $gatewayUrl;
+    private ?string $traceId;
+    private ?string $qrUrl;
+    private ?string $recurrenceResult;
+    private array $error;
 
-    private ?string $paymentId = null;
-    private ?string $paymentRequestId = null;
-    private ?string $transactionId = null;
-    private ?string $gatewayUrl = null;
-    private ?string $traceId = null;
-    private ?string $qrUrl = null;
+    /**
+     * @var Collection<int, ProcessedTransactionDto>
+     */
+    private Collection $transactions;
 
-    private ?array $error = null;
-
-    public function __construct(array $response)
+    public function __construct(private readonly array $raw)
     {
-        $this->checkIsSuccess($response);
-        $this->convertResponse($response);
-    }
-
-    private function convertResponse(array $response): void
-    {
-        if($this->isSuccess) {
-            $this->paymentId = $response['PaymentId'];
-            $this->paymentRequestId = $response['PaymentRequestId'];
-            $this->status = BarionStatus::from($response['Status']);
-            $this->transactionId = $response['Transactions'][0]['TransactionId'];
-            $this->gatewayUrl = $response['GatewayUrl'];
-            $this->currency = $response['Transactions'][0]['Currency'];
-            $this->traceId = $response['TraceId'] ?? null;
-            $this->qrUrl = $response['QRUrl'];
-        } else {
-            $this->error = $response['Errors'];
-        }
-    }
-
-    private function checkIsSuccess(array $response): void
-    {
-        $this->isSuccess = empty($response['Errors']);
+        $this->error = $raw['Errors'] ?? [];
+        $this->isSuccess = empty($this->error);
+        $this->paymentId = $raw['PaymentId'] ?? null;
+        $this->paymentRequestId = $raw['PaymentRequestId'] ?? null;
+        $this->status = BarionStatus::tryFrom((string) ($raw['Status'] ?? ''));
+        $this->transactions = Collection::make($raw['Transactions'] ?? [])
+            ->map(fn (array $transaction): ProcessedTransactionDto => ProcessedTransactionDto::fromArray($transaction))
+            ->values();
+        $this->transactionId = $this->transactions->first()?->transactionId;
+        $this->currency = $this->transactions->first()?->currency ?? ($raw['Currency'] ?? null);
+        $this->gatewayUrl = $raw['GatewayUrl'] ?? ($this->paymentId ? BarionAdapter::gatewayUrl($this->paymentId) : null);
+        $this->traceId = $raw['TraceId'] ?? null;
+        $this->qrUrl = $raw['QRUrl'] ?? null;
+        $this->recurrenceResult = $raw['RecurrenceResult'] ?? null;
     }
 
     public function getPaymentId(): string
     {
-        return $this->paymentId;
+        return (string) $this->paymentId;
     }
 
     public function getPaymentRequestId(): string
     {
-        return $this->paymentRequestId;
+        return (string) $this->paymentRequestId;
+    }
+
+    public function getStatus(): ?BarionStatus
+    {
+        return $this->status;
     }
 
     public function getGatewayUrl(): string
     {
-        return $this->gatewayUrl;
+        return (string) $this->gatewayUrl;
     }
 
+    /**
+     * The Barion identifier of the first transaction (needed for refunds, finishing and capturing).
+     */
     public function getTransactionId(): string
     {
-        return $this->transactionId;
+        return (string) $this->transactionId;
     }
 
-    public function getTraceId(): string
+    /**
+     * @return Collection<int, ProcessedTransactionDto>
+     */
+    public function getTransactions(): Collection
+    {
+        return $this->transactions;
+    }
+
+    /**
+     * Keep it for the merchant initiated payments of a recurring payment.
+     */
+    public function getTraceId(): ?string
     {
         return $this->traceId;
     }
 
-    public function getQrUrl(): string
+    public function getQrUrl(): ?string
     {
         return $this->qrUrl;
+    }
+
+    /**
+     * Result of a recurring payment: None, Successful, Failed, NotFound or ThreeDSAuthenticationRequired.
+     */
+    public function getRecurrenceResult(): ?string
+    {
+        return $this->recurrenceResult;
     }
 
     public function getError(): array
@@ -87,6 +116,11 @@ class BarionPaymentResponse implements PaymentResponse
 
     public function getErrorMessage(): string
     {
-        return $this->error['Description'];
+        return (string) ($this->error[0]['Description'] ?? $this->error[0]['Title'] ?? '');
+    }
+
+    public function getRaw(): array
+    {
+        return $this->raw;
     }
 }

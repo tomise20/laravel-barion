@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Traits;
 
-use ReflectionClass;
-use ReflectionProperty;
+use BadMethodCallException;
 use Illuminate\Support\Str;
 
-trait HasSetter {
-    public static function bootHasSetters()
+/**
+ * Fluent setters for the public properties: setUnitPrice(100) sets $unitPrice and returns the object.
+ */
+trait HasSetter
+{
+    public function __call(string $method, array $arguments): static
     {
-        $class = new ReflectionClass(static::class);
-        $properties = $class->getProperties(ReflectionProperty::IS_PUBLIC);
+        if (str_starts_with($method, 'set') && count($arguments) === 1) {
+            $property = Str::camel(substr($method, 3));
 
-        foreach ($properties as $property) {
-            $propertyName = $property->getName();
-            $setterName = 'set' . Str::studly($propertyName);
+            if (property_exists($this, $property)) {
+                $this->{$property} = $arguments[0];
 
-            if (!method_exists(static::class, $setterName)) {
-                static::macro($setterName, function ($value) use ($propertyName) {
-                    $this->$propertyName = $value;
-                    return $this; // For method chaining
-                });
+                return $this;
             }
         }
+
+        throw new BadMethodCallException(sprintf('Method %s::%s does not exist.', static::class, $method));
     }
 }

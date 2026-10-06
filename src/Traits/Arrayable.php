@@ -4,31 +4,33 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Traits;
 
+use BackedEnum;
+use DateTimeInterface;
+use Illuminate\Support\Collection;
 use ReflectionClass;
 use ReflectionProperty;
-use Illuminate\Support\Str;
+use Tomise\Barion\Utils\Amount;
+use Tomise\Barion\Utils\TransformHelper;
 
-trait Arrayable {
-    public function toArray(): array {
-        $class = new ReflectionClass($this);
-        $properties = $class->getProperties(ReflectionProperty::IS_PUBLIC);
-
+/**
+ * Converts the public properties to the PascalCase array Barion expects (e.g. unitPrice => UnitPrice), and back.
+ * Unset (uninitialized) and null properties are left out.
+ */
+trait Arrayable
+{
+    public function toArray(): array
+    {
         $data = [];
-        foreach ($properties as $property) {
+
+        foreach ((new ReflectionClass($this))->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            if ($property->isStatic() || ! $property->isInitialized($this)) {
+                continue;
+            }
+
             $value = $property->getValue($this);
+
             if ($value !== null) {
-                if (is_object($value) && method_exists($value, 'toArray')) {
-                    $data[$property->getName()] = $value->toArrayRecursive(); // Recursive call
-                } elseif (is_array($value)) {
-                    $data[$property->getName()] = array_map(function ($item) {
-                        if (is_object($item) && method_exists($item, 'toArray')) {
-                            return $item->toArrayRecursive();
-                        }
-                        return $item;
-                    }, $value);
-                } else {
-                    $data[$property->getName()] = $value;
-                }
+                $data[ucfirst($property->getName())] = self::serializeValue($value);
             }
         }
 
@@ -37,39 +39,21 @@ trait Arrayable {
 
     public static function fromArray(array $data, bool $strict = false): static
     {
-        $class = new ReflectionClass(static::class);
-        $instance = $class->newInstanceWithoutConstructor();
+        $instance = (new ReflectionClass(static::class))->newInstanceWithoutConstructor();
 
-        foreach ($data as $key => $value) {
-            $propertyName = Str::camel($key);
+        return TransformHelper::transformArray($instance, $data, $strict);
+    }
 
-            try {
-                $property = $class->getProperty($propertyName);
-                $property->setAccessible(true);
-
-                $attributes = $property->getAttributes();
-
-                if (!empty($attributes)) {
-                    $attributeInstance = $attributes[0]->newInstance();
-
-                    if (method_exists($attributeInstance, 'process')) {
-                        $processedValue = $attributeInstance->process($value);
-                        $property->setValue($instance, $processedValue);
-                    }
-                } else {
-                    $property->setValue($instance, $value);
-                }
-            } catch (\ReflectionException $e) {
-                if ($strict) {
-                    throw new \Exception("Property '$propertyName' (from key '$key') is not defined in class '" . static::class . "'", 0, $e);
-                }
-            } catch (\ValueError $e) {
-                if ($strict) {
-                    throw new \Exception("Invalid value for property '$propertyName' (from key '$key') in class '" . static::class . "': " . $e->getMessage(), 0, $e);
-                }
-            }
-        }
-
-        return $instance;
+    private static function serializeValue(mixed $value): mixed
+    {
+        return match (true) {
+            $value instanceof BackedEnum => $value->value,
+            $value instanceof DateTimeInterface => $value->format(DATE_ATOM),
+            $value instanceof Collection => $value->map(fn (mixed $item): mixed => self::serializeValue($item))->values()->all(),
+            is_object($value) && method_exists($value, 'toArray') => $value->toArray(),
+            is_array($value) => array_map(fn (mixed $item): mixed => self::serializeValue($item), $value),
+            is_float($value) => Amount::normalize($value),
+            default => $value,
+        };
     }
 }

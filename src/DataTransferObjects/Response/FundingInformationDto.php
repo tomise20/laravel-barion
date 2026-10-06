@@ -6,15 +6,16 @@ namespace Tomise\Barion\DataTransferObjects\Response;
 
 use Tomise\Barion\Traits\Arrayable;
 
+/**
+ * How the payment was funded, e.g. the (masked) bank card.
+ */
 class FundingInformationDto
 {
     use Arrayable;
 
     public function __construct(
-        public readonly array $bankCard,
-        public readonly ?string $authorizationCode = null,
-        public readonly ?string $processResult = null
-    )
-    {
-    }
+        public ?array $bankCard = null,
+        public ?string $authorizationCode = null,
+        public ?string $processResult = null,
+    ) {}
 }

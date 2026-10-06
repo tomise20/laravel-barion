@@ -1,249 +1,303 @@
 # A simple Laravel package for Barion Smart Gateway
 
-### **Connect your webshop to the Barion Smart Gateway in just 5 minutes.**
-
-### **Development currently in progress!**
-
-Tomise/Laravel-Barion is provides an easy way to use the Barion API with Laravel applications.Support Barion Smart Gateway operation and Barion Wallet operations.
+Tomise/Laravel-Barion provides an easy way to use the Barion API in Laravel applications (10–13): Smart Gateway
+payments (immediate, reservation, delayed capture, recurring), payment state, refund, and Barion Wallet operations.
 
 ## Installation
 
 1. Install the package using composer:
 
-`composer require tomise/laravel-barion`
-
-2. Register the service provider in the `app.php` config file
-
-```php
-Tomise\Barion\Providers\BarionServiceProvider::class,
+```bash
+composer require tomise/laravel-barion
 ```
 
-3. Publish config file (optional)
+From a local checkout, add a path repository to the application's `composer.json` first:
 
-```php
+```json
+"repositories": [
+    { "type": "path", "url": "../libs/barion" }
+]
+```
+
+2. The service provider is registered automatically (package discovery). Without discovery, add
+   `Tomise\Barion\Providers\BarionServiceProvider::class` to the providers.
+
+3. Publish the config file (optional):
+
+```bash
 php artisan vendor:publish --provider="Tomise\Barion\Providers\BarionServiceProvider" --tag="config"
 ```
 
 ## Configuration
 
-Package has a pre-configuration, but you set some data your .env file:
-Configuration details in config/barion-gateway.php
+Details in `config/barion-gateway.php`.
 
-```php
-#required:
-BARION_POST_KEY=<your pos key>
-BARION_REDIRECT_URL=<your default redirect url>
-BARION_CALLBACK_URL=<your default callback url>
+```dotenv
+# required
+BARION_POS_KEY=<your POS key>            # BARION_POST_KEY (the old name) is still read
+BARION_PAYEE=<the e-mail of your Barion wallet>
+BARION_REDIRECT_URL=<where the customer returns after paying>
+BARION_CALLBACK_URL=<where Barion reports the changes of a payment>
 
-#optional:
-# only need for wallet operations
-BARION_API_KEY=<your wallet api key>
-BARION_PAYEE=<payee email>
+# optional
+BARION_ENVIRONMENT=test                  # "prod" sends to the live API, anything else to the sandbox
+BARION_PAYMENT_TYPE=Immediate            # Immediate | Reservation | DelayedCapture
+BARION_PAYMENT_WINDOW=00:30:00           # how long the customer can pay
+BARION_RESERVATION_PERIOD=7.00:00:00     # Reservation: time to finish the payment (max. 1 year)
+BARION_DELAYED_CAPTURE_PERIOD=7.00:00:00 # DelayedCapture: time to capture (max. 7 days, 21 for Hungarian shops)
+BARION_GUEST_CHECKOUT=true
+BARION_TIMEOUT=30                        # seconds
 
-#others:
-BARION_ENVIRONMENT=<default test>
-BARION_GUEST_CHECKOUT=<default true>
-BARION_PAYMENT_TYPE=<default Immediate>
-BARION_PAYMENT_WINDOW=<default 00:30:00>
+# only for wallet operations
+BARION_API_KEY=<your wallet API key>
 ```
 
-If your `BARION_ENVIRONMENT` variable value is "test" every request send to sandbox server.
+## Smart Gateway
 
-### Documentation for Smart Gateway
+Every request method throws:
 
-## There are 2 ways to use the BarionGateway (model options only available for payment start operation).
+- `Tomise\Barion\Exceptions\BarionPaymentException` when Barion rejects the request. The message is Barion's
+  (`Title: Description`), `getErrors()` has every error, `getErrorCode()` the first error code, `getCode()` the HTTP status.
+- `Tomise\Barion\Exceptions\BarionConnectionException` when Barion cannot be reached.
 
-### **Usage with models**
-
-**The $barion_casts property should be a key-value pair based array, the keys are given and the values are the fields of the model you want to pass to the Barion.**
-
-If you want to use Barion with your models only needs some simple step:
-
-1. Add `public $barion_casts = []` you Order or Cart or any class that extends from Model.
-
-   1. Required keys: payment_request_id, payer_hint, order_number, phone_number, total
-
-Example
+### Start a payment
 
 ```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class Order extends Model
-{
-    ...other properties
-
-    public $barion_casts = [
-		'payment_request_id' => 'id',
-		'payer_hint' => 'email',
-		'order_number' => 'reservation_number',
-		'phone_number' => 'phone_number',
-		'total' => 'total_price',
-	];
-
-    ...other methods
-}
-```
-
-2. Add `public $barion_casts = []` you OrderItem or CartItem or any class that also extends from Model.
-   1. Required keys: name, description, quantity, unit, unit_price, item_total
-
-```php
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class OrderItem extends Model
-{
-    ...other properties
-    public $barion_casts = [
-		"name" => "name",
-		"description" => "description",
-		"quantity" => "quantity",
-		"unit" => "unit",
-		"unit_price" => "unit_price",
-		"item_total" => "item_total",
-	];
-
-    ...other methods
-}
-```
-
-If you want to use this version, but you are missing one or more properties of a model, just attach it before passing it to the startPayment method or you can create a custom model directly for Barion e.g.: BarionOrderModel
-
-#### Start single payment
-
-```php
-<?php
-
+use Tomise\Barion\DataTransferObjects\PaymentTransactionDto;
+use Tomise\Barion\DataTransferObjects\TransactionItemDto;
 use Tomise\Barion\Support\BarionGateway;
 
-...
+$payment = BarionGateway::createPaymentGateway()->startPaymentManual();
 
-// Get payment gateway.
-$gateway = BarionGateway::createPaymentGateway();
+$payment->getPaymentData()
+    ->setPaymentRequestId('ORDER-1001')      // your unique id (a UUID is generated when missing)
+    ->setOrderNumber('ORDER-1001')
+    ->setPayerHint('customer@example.com')
+    ->setPayerPhoneNumber('+36 30 123 4567') // sent as 36301234567
+    ->addTransaction(
+        (new PaymentTransactionDto)
+            ->setPostTransactionId('ORDER-1001')
+            ->setPayee(config('barion-gateway.payee'))
+            ->setTotal(16500)
+            ->setItems([
+                (new TransactionItemDto)
+                    ->setName('Sports massage')
+                    ->setDescription('60 minutes')
+                    ->setQuantity(1)
+                    ->setUnit('pcs')
+                    ->setUnitPrice(16500),   // ItemTotal defaults to quantity × unit price
+            ])
+    );
 
-// Build barion payment data from your models
-$preparedPayment = $gateway->startPayment($order, $items);
+$response = $payment->sendSinglePayment();
 
-// Send data to Barion
-$response = $preparedPayment->sendSinglePayment();
+// Store these with the order: the callback and the refund need them.
+$response->getPaymentId();
+$response->getTransactionId();
 
-// Redirect user to the Barion Gateway
 return redirect($response->getGatewayUrl());
 ```
 
-**startPayment** method only assign minimal data to [Payment/Start](https://docs.barion.com/Payment-Start-v2) endpoint. But if you want to add some extra data just set before you call the **sendSinglePayment**.
+`startPaymentManual()` fills the configured defaults (payment type, periods, payment window, guest checkout, funding
+sources, redirect and callback URL, locale, currency). Amounts are rounded to the currency's decimals (HUF: 0).
 
-Example
+#### Usage with models
 
-```php
-// Get payment gateway.
-$gateway = BarionGateway::createPaymentGateway();
-
-// Build barion payment data from your models
-$preparedPayment = $gateway->startPayment($order, $items);
-$paymentDto = $preparedPayment->getPaymentDto();
-// Add billing address before send the request.
-$paymentDto->setBillingAddress($address);
-// Send data to Barion
-$response = $preparedPayment->sendSinglePayment();
-```
-
-#### Different Locale and Currency
-
-If you want to use the "model option" but are missing the locale or the currency from your "order" model, you can simply overwrite the default values.
-
-**Important:** Changing the currency does not automatically convert the values, please note this!
+The models need a `$barion_casts` property: the keys are given, the values are the model's attributes.
 
 ```php
-...
-$preparedPayment = $gateway->startPayment($order, $items);
-$paymentDto = $preparedPayment->getPaymentDto();
-// Modify the default currency and locale
-$paymentDto->setCurrency(Currency::Huf);
-$paymentDto->setLocale(Locale::Hu);
-$response = $preparedPayment->sendSinglePayment();
+class Order extends Model
+{
+    public $barion_casts = [
+        'total' => 'total_price',            // required
+        'payment_request_id' => 'reference', // a UUID is generated when missing
+        'payer_hint' => 'email',
+        'order_number' => 'reference',
+        'phone_number' => 'phone',
+        // 'card_holder_name_hint' => 'name',
+        // 'payee' => 'payee_email',         // defaults to BARION_PAYEE
+    ];
+}
+
+class OrderItem extends Model
+{
+    public $barion_casts = [
+        'name' => 'name',
+        'description' => 'description',
+        'quantity' => 'quantity',
+        'unit' => 'unit',
+        'unit_price' => 'unit_price',
+        'item_total' => 'item_total',
+    ];
+}
 ```
-
-### **Simple manual usage**
-
-#### Payment Start
-
-In this case you will get an empty "PreparedPaymentService" object where you can set everything. **The POSKey is automatically attached to the object.**
 
 ```php
-<?php
-
-use Tomise\Barion\Support\BarionGateway;
-use Tomise\Barion\DataTransferObjects\Currency;
-use Tomise\Barion\DataTransferObjects\Locale;
-
-...
-// Get payment gateway.
-$gateway = BarionGateway::createPaymentGateway();
-
-$preparedPayment = $gateway->startPaymentManual();
-
-$paymentDto = $preparedPayment->getPaymentDto();
-$paymentDto->setTransactions($transactions);
-$paymentDto->setCurrency(Currency::Huf);
-$paymentDto->setLocale(Locale::Hu);
-...
-$response = $preparedPayment->sendSinglePayment();
+$payment = BarionGateway::createPaymentGateway()->startPayment($order, $order->items);
+// Extra data before sending, e.g. $payment->getPaymentData()->setBillingAddress($address);
+$response = $payment->sendSinglePayment();
 ```
 
-#### Get Payment Status
+Locale and currency come from the config; to change them: `$payment->getPaymentData()->setCurrency(Currency::Eur)`.
+**Changing the currency does not convert the amounts.**
+
+### Callback: the state of a payment
+
+Barion only posts the `paymentId` to the callback URL; query the state (v4 PaymentState):
 
 ```php
-// Get payment gateway.
-$gateway = BarionGateway::createPaymentGateway();
+$state = BarionGateway::createPaymentGateway()->startPaymentManual()->sendPaymentState($request->input('paymentId'));
 
-$preparedPayment = $gateway->startPaymentManual();
-$response = $preparedPayment->sendPaymentState($paymentId);
+$state->isSucceeded();              // Status === Succeeded
+$state->status;                     // BarionStatus enum
+$state->paymentRequestId;           // your id
+$state->transaction('ORDER-1001');  // the customer's transaction of a POSTransactionId (no fees, no reversed ones)
+$state->completedAt;                // DateTimeImmutable
 ```
 
-#### Cancel Authorization
+Answer the callback with HTTP 200, Barion retries otherwise.
+
+### Refund
+
+Full or partial, per transaction (the `TransactionId` from the start or the state response):
 
 ```php
-// Get payment gateway.
-$gateway = BarionGateway::createPaymentGateway();
+use Tomise\Barion\DataTransferObjects\TransactionToRefundDto;
 
-$preparedPayment = $gateway->startPaymentManual();
-// Set required parameter
-$preparedPayment->setPaymentId($paymentId);
-$response = $preparedPayment->sendCancelAuthorization($paymentId);
+$response = BarionGateway::createPaymentGateway()->startPaymentManual()->sendRefund(
+    $paymentId,
+    [new TransactionToRefundDto($transactionId, 'ORDER-1001', 5000, 'Partial refund')],
+    idempotencyKey: 'refund-ORDER-1001-1', // a retried request with the same key is refunded only once
+);
+
+$response->refundedTransactions; // Collection of RefundedTransactionDto
 ```
 
-## Information
+### Reservation: charge later, finish with the final amount
 
-**Available gateway endpoints:**
+The amount is charged at once and held until the payment is finished (`BARION_RESERVATION_PERIOD`, max. 1 year). A
+lower final total refunds the rest, 0 refunds everything. Transactions not finished in time are refunded to the
+customer (status `Expired`, or `PartiallySucceeded` when some were finished).
 
-- sendSinglePayment() -> Payment/Start
-- sendPaymentState() -> Payment/:paymentId/paymentstate
-- sendCompletePayment() -> Payment/Complete
-- sendFinishReservation() -> Payment/FinishReservation
-- sendCapture() -> Payment/Capture
-- sendCancelAuthorization() -> Payment/CancelAuthorization
-- sendRefund() -> Payment/Refund
+```php
+use Tomise\Barion\DataTransferObjects\TransactionToFinishDto;
+use Tomise\Barion\Enums\PaymentType;
+
+$payment = BarionGateway::createPaymentGateway()->startPaymentManual();
+$payment->getPaymentData()->setPaymentType(PaymentType::Reservation)->setReservationPeriod('3.00:00:00') /* ... */;
+$response = $payment->sendSinglePayment();
+
+// later
+BarionGateway::createPaymentGateway()->startPaymentManual()
+    ->sendFinishReservation($paymentId, [new TransactionToFinishDto($transactionId, 12000)]);
+```
+
+### Delayed capture: authorize now, capture later
+
+The amount is only blocked on the card (`BARION_DELAYED_CAPTURE_PERIOD`, max. 7 days, 21 days for Hungarian shops)
+and charged on capture. An uncaptured authorization is released when the period expires (status `Expired`). Card
+payments only; the card issuer can release the block earlier, then the capture fails.
+
+```php
+$payment->getPaymentData()->setPaymentType(PaymentType::DelayedCapture) /* ... */;
+
+// charge (at most the authorized amount)
+$client->sendCapture($paymentId, [new TransactionToFinishDto($transactionId, 16500, 'Treatment done')]);
+
+// or release without charging
+$client->sendCancelAuthorization($paymentId);
+```
+
+### Token payments: save the card, charge it later
+
+The first payment is made by the customer on the Barion page and saves the card under your `RecurrenceId` (3DS
+authentication happens here). Later payments with the same `RecurrenceId` are charged without the customer: the
+response is already `Succeeded`, or Barion's error (e.g. `CardExpired`) is thrown. A premium feature: it has to be
+requested from Barion. Barion does not schedule the charges: call the API when a charge is due (e.g. from a scheduled
+command).
+
+| `RecurrenceType` | When | Amount |
+|---|---|---|
+| `MerchantInitiatedPayment` | irregular charges without the customer (e.g. on a date, a no-show fee) | any; the first payment can be 0 (card registration only) |
+| `RecurringPayment` | regular charges without the customer (subscription) | at most the first amount; needs `PurchaseInformation` RecurringFrequency and RecurringExpiry |
+| `OneClickPayment` | the customer pays again on your site | any; 3DS on every payment |
+
+The customer must clearly consent to the later charges: the Barion page does not show that the card is saved.
+
+```php
+use Tomise\Barion\Enums\RecurrenceType;
+
+// 1. Registration, by the customer (here without charging anything)
+$payment->getPaymentData()
+    ->setInitiateRecurrence(true)
+    ->setRecurrenceId('guest-42-'.Str::uuid())  // unique per registration; store it
+    ->setRecurrenceType(RecurrenceType::MerchantInitiatedPayment);
+
+// 2. In the callback: store the TraceId (and the card for display)
+$state = $client->sendPaymentState($paymentId);
+$state->traceId;                       // required for the later charges, store it unchanged
+$state->fundingInformation?->bankCard; // masked PAN, card type, expiry
+
+// 3. Later, without the customer
+$charge->getPaymentData()
+    ->setRecurrenceId($recurrenceId)
+    ->setRecurrenceType(RecurrenceType::MerchantInitiatedPayment) // the same type as at registration
+    ->setTraceId($traceId);
+$response = $charge->sendSinglePayment(idempotencyKey: 'charge-booking-1001');
+$response->getStatus();           // BarionStatus::Succeeded
+$response->getRecurrenceResult(); // Successful, Failed, NotFound, ThreeDSAuthenticationRequired (TraceId missing)
+```
+
+When a charge fails, Barion suggests checking `FundingInformation->ProcessResult` in the payment state: do not retry
+`LostOrStolenCard`, `FraudulentTransaction`, `CardNotSupported` or `ThreeDsNotEnabled`. Retry the others later
+(at least a day apart, at most 5 times), then ask the customer to register a card again.
+
+### Follow-up requests
+
+The follow-up methods take the `PaymentId` as a parameter, or use the one set with `setPaymentId()`:
+
+```php
+$client = BarionGateway::createPaymentGateway()->startPaymentManual()->setPaymentId($paymentId);
+$client->sendCancelAuthorization();
+```
+
+| Method | Endpoint |
+|---|---|
+| `sendSinglePayment(?idempotencyKey)` | `POST v2/Payment/Start` |
+| `sendPaymentState(paymentId)` | `GET v4/Payment/{paymentId}/PaymentState` |
+| `sendRefund(?paymentId, transactions, ?idempotencyKey)` | `POST v2/Payment/Refund` |
+| `sendFinishReservation(?paymentId, transactions)` | `POST v2/Payment/FinishReservation` |
+| `sendCapture(?paymentId, transactions)` | `POST v2/Payment/Capture` |
+| `sendCancelAuthorization(?paymentId)` | `POST v2/Payment/CancelAuthorization` |
+| `sendCompletePayment(?paymentId)` | `POST v2/Payment/Complete` |
 
 **Available Locales:** [https://docs.barion.com/Localisation](https://docs.barion.com/Localisation)
 
-**Available Currencies:**[https://docs.barion.com/Supported_currencies](https://docs.barion.com/Supported_currencies)
+**Available Currencies:** [https://docs.barion.com/Supported_currencies](https://docs.barion.com/Supported_currencies)
 
-### Documentation for Barion Wallet
+### Testing your application
+
+`BarionGateway` resolves the service from the container, so the HTTP client can be replaced:
+
+```php
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Response;
+use Tomise\Barion\Adapters\BarionAdapter;
+
+$mock = new MockHandler([new Response(200, [], json_encode(['PaymentId' => 'test-payment', 'Status' => 'Prepared', 'Transactions' => []]))]);
+$this->app->instance(BarionAdapter::class, new BarionAdapter(new Client(['handler' => HandlerStack::create($mock), 'http_errors' => false])));
+```
+
+## Barion Wallet
 
 [Barion Wallet documentation](docs/wallet.md)
 
-### Examples
+## Examples
 
-- [Payment example with model](examples/payment-width-models/)
-- [Manual payment example](examples/manual-payment/)
+- [Payment example with models](examples/payment-width-models/)
+- [Manual payment, callback and refund example](examples/manual-payment/)
 
 ## License
 

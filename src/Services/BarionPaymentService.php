@@ -15,25 +15,24 @@ class BarionPaymentService extends AbstractBarionService implements IBarionPayme
 {
     private BarionAdapter $adapter;
 
-    public function __construct()
+    public function __construct(?BarionAdapter $adapter = null)
     {
-        $this->adapter = new BarionAdapter();
+        $this->adapter = $adapter ?? new BarionAdapter;
     }
 
     /**
-     * @param Collection<Model>|Model $order
-     * @param Collection<Model> $items
-     * 
+     * A payment built from an order model and its items (both with $barion_casts).
+     *
+     * @param  Collection<int, Model>  $items
+     *
      * @throws BarionPaymentException If the model does not have the required Barion properties
      */
-    public function startPayment(
-        Collection|Model $order,
-        Collection $items,
-    ): PaymentClient
+    public function startPayment(Model $order, Collection $items): PaymentClient
     {
         $this->checkModelBarionProperty($order);
+        $items->each(fn (Model $item) => $this->checkModelBarionProperty($item));
 
-        $paymentData = (new BarionParamsBuilder())
+        $paymentData = (new BarionParamsBuilder)
             ->setOrder($order)
             ->setItems($items)
             ->build();
@@ -41,10 +40,13 @@ class BarionPaymentService extends AbstractBarionService implements IBarionPayme
         return new PaymentClient($paymentData, $this->adapter);
     }
 
+    /**
+     * An empty payment with the configured defaults; also the client of the follow-up requests (state, refund...).
+     *
+     * @throws BarionPaymentException
+     */
     public function startPaymentManual(): PaymentClient
     {
-        $paymentData = (new BarionParamsBuilder())->buildManual();
-
-        return new PaymentClient($paymentData, $this->adapter);
-    }    
+        return new PaymentClient((new BarionParamsBuilder)->buildManual(), $this->adapter);
+    }
 }

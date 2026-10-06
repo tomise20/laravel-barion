@@ -8,7 +8,6 @@ use Carbon\Carbon;
 use Tomise\Barion\Traits\Arrayable;
 use Tomise\Barion\Traits\HasSetter;
 
-
 /**
  * @method self setUserId(int $userId)
  * @method self setReservationId(int $reservationId)
@@ -22,15 +21,9 @@ use Tomise\Barion\Traits\HasSetter;
  */
 class TransactionDto
 {
-
     use Arrayable, HasSetter;
 
-    public function __construct()
-    {
-        $this->bootHasSetters();
-    }
-
-    public ?int $userId;
+    public ?int $userId = null;
     public int $reservationId;
     public string $paymentMethod;
     public string $paymentId;

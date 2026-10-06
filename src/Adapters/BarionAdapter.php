@@ -5,149 +5,172 @@ declare(strict_types=1);
 namespace Tomise\Barion\Adapters;
 
 use GuzzleHttp\Client;
-use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Psr\Http\Message\ResponseInterface;
-use Tomise\Barion\DataTransferObjects\BarionPaymentDto;
 use Tomise\Barion\DataTransferObjects\BarionWalletDto;
 use Tomise\Barion\Enums\BarionGatewayEndpoint;
 use Tomise\Barion\Enums\BarionWalletEndpoint;
 use Tomise\Barion\Exceptions\BarionConnectionException;
 use Tomise\Barion\Exceptions\BarionPaymentException;
 
+/**
+ * HTTP layer of the Barion API. The POS key goes in the x-pos-key header (Smart Gateway), the API key in x-api-key
+ * (Wallet). Barion's error responses (400, 409, 422 and errors in a 200 response) become BarionPaymentException.
+ */
 class BarionAdapter
 {
-    private Client $client;
-
-    private const SUCCESS_STATUS_CODE = 200;
-
     private const SANDBOX_URL = 'https://api.test.barion.com';
 
     private const PRODUCTION_URL = 'https://api.barion.com';
 
-    private const GET_TYPE = 'GET';
+    private const SANDBOX_GATEWAY_URL = 'https://secure.test.barion.com/Pay';
 
-    private const POST_TYPE = 'POST';
+    private const PRODUCTION_GATEWAY_URL = 'https://secure.barion.com/Pay';
 
-    public function __construct()
+    private ClientInterface $client;
+
+    public function __construct(?ClientInterface $client = null)
     {
-        $baseUrl = config('barion-gateway.environment') === 'test' ? self::SANDBOX_URL : self::PRODUCTION_URL;
-
-        $this->client = new Client([
-            'base_uri' => $baseUrl,
-            'timeout' => 3.0,
+        $this->client = $client ?? new Client([
+            'base_uri' => self::isSandbox() ? self::SANDBOX_URL : self::PRODUCTION_URL,
+            'timeout' => (float) config('barion-gateway.timeout', 30),
+            'connect_timeout' => 10,
+            // Error responses are handled here, with Barion's own error messages.
+            'http_errors' => false,
             'headers' => [
                 'Accept' => 'application/json',
-                'Content-Type' => 'application/json'
-            ]
+                'Content-Type' => 'application/json',
+            ],
         ]);
-
-        $this->checkConnection();
     }
 
-    public function sendGatewayRequest(BarionPaymentDto $paymentDto, BarionGatewayEndpoint $endpoint, array $extras = null): ResponseInterface
+    public static function isSandbox(): bool
     {
-        $requestType = $this->getRequestType($endpoint);
-
-        if($endpoint === BarionGatewayEndpoint::PaymentState) {
-            $path = str_replace(':paymentId', $extras['paymentId'], $endpoint->value);
-        } else {
-            $path = $endpoint->value;
-        }
-
-        try {
-            $rawResponse = $this->client->request($requestType, $path, [
-                'json' => $paymentDto->toArray(),
-                'headers' => [
-                    'x-pos-key' => $paymentDto->getPosKey(),
-                ]
-            ]);
-        } catch(RequestException $e) {
-            if($e->hasResponse()) {
-                throw new BarionPaymentException('Request failed: '.$e->getMessage());
-            }
-
-            throw new BarionPaymentException($e->getMessage());
-        }
-
-        return $rawResponse;
+        return config('barion-gateway.environment', 'test') !== 'prod';
     }
 
+    /**
+     * The Barion payment page of a payment (when the response has no GatewayUrl).
+     */
+    public static function gatewayUrl(string $paymentId): string
+    {
+        return (self::isSandbox() ? self::SANDBOX_GATEWAY_URL : self::PRODUCTION_GATEWAY_URL).'?Id='.rawurlencode($paymentId);
+    }
+
+    /**
+     * Send a Smart Gateway request and return the decoded response.
+     *
+     * @param  array<string, mixed>  $body  JSON body of POST requests
+     * @param  array<string, string>  $pathParameters  e.g. ['paymentId' => '...'] for PaymentState
+     * @param  string|null  $idempotencyKey  makes a retried POST safe (Barion runs it only once)
+     *
+     * @throws BarionPaymentException when Barion rejects the request
+     * @throws BarionConnectionException when Barion cannot be reached
+     */
+    public function send(
+        BarionGatewayEndpoint $endpoint,
+        string $posKey,
+        array $body = [],
+        array $pathParameters = [],
+        ?string $idempotencyKey = null,
+    ): array {
+        $options = ['headers' => array_filter([
+            'x-pos-key' => $posKey,
+            'Idempotency-Key' => $idempotencyKey,
+        ])];
+
+        if ($endpoint->isGetEndpoint()) {
+            if ($endpoint === BarionGatewayEndpoint::GetPaymentState) {
+                $options['query'] = ['PaymentId' => $pathParameters['paymentId'] ?? ''];
+            }
+        } else {
+            $options['json'] = $body;
+        }
+
+        return $this->decode($this->request($endpoint->isGetEndpoint() ? 'GET' : 'POST', $endpoint->path($pathParameters), $options));
+    }
+
+    /**
+     * @throws BarionPaymentException
+     * @throws BarionConnectionException
+     */
     public function sendWalletRequest(BarionWalletDto $walletDto, BarionWalletEndpoint $endpoint): ResponseInterface
     {
-        $requestType = $this->getRequestType($endpoint);
+        $options = ['headers' => ['x-api-key' => $walletDto->getApiKey()]];
 
-        try {
-            $rawResponse = $this->client->request($requestType, $endpoint->value, [
-                'json' => $walletDto->toArray(),
-                'headers' => [
-                    'x-api-key' => $walletDto->getApiKey(),
-                ]
-            ]);
-        } catch(RequestException $e) {
-            if($e->hasResponse()) {
-                throw new BarionPaymentException('Request failed: '.$e->getMessage());
-            }
-
-            throw new BarionPaymentException($e->getMessage());
+        if ($endpoint->isGetEndpoint()) {
+            $options['query'] = $walletDto->toArray();
+        } else {
+            $options['json'] = $walletDto->toArray();
         }
 
-        return $rawResponse;
+        $response = $this->request($endpoint->isGetEndpoint() ? 'GET' : 'POST', ltrim($endpoint->value, '/'), $options);
+        // Throws on Barion errors; the response stays readable for the caller.
+        $this->decode($response);
+
+        return $response;
     }
 
+    /**
+     * Download a statement into the configured disk; returns the path on that disk.
+     *
+     * @throws BarionPaymentException
+     * @throws BarionConnectionException
+     */
     public function sendDownload(BarionWalletDto $walletDto): string
     {
-        try {
-            $rawResponse = $this->client->request(self::GET_TYPE, 'v2/Statement/Download', [
-                'json' => $walletDto->toArray(),
-                'headers' => [
-                    'x-api-key' => $walletDto->getApiKey(),
-                ]
-            ]);
+        $response = $this->request('GET', BarionWalletEndpoint::Download->value, [
+            'headers' => ['x-api-key' => $walletDto->getApiKey()],
+            'query' => $walletDto->toArray(),
+        ]);
 
-            if($rawResponse->getStatusCode() === self::SUCCESS_STATUS_CODE) {
-                $now = Carbon::now()->toDateTimeString();
-                $extension = $this->getExtension($walletDto);
-                $filePath = storage_path('app/barion/download_'.$now.$extension);
-
-                Storage::put($filePath, $rawResponse->getBody());
-            }
-        } catch(RequestException $e) {
-            if($e->hasResponse()) {
-                throw new BarionPaymentException($e->getMessage());
-            }
-
-            throw new BarionPaymentException($e->getMessage());
+        if ($response->getStatusCode() !== 200) {
+            $this->decode($response);
         }
 
-        return $filePath;
+        $directory = trim((string) (config('barion-gateway.downloadPath') ?? 'barion'), '/');
+        $path = $directory.'/download_'.Carbon::now()->format('Ymd_His').($walletDto->getDay() ? '.xlsx' : '.pdf');
+
+        Storage::put($path, (string) $response->getBody());
+
+        return $path;
     }
 
-    private function getExtension(BarionWalletDto $walletDto): string
-    {
-        if($walletDto->getDay()) {
-            return '.xlsx';
-        }
-
-        return '.pdf';
-    }
-
-    private function checkConnection(): void
+    /**
+     * @throws BarionConnectionException
+     */
+    private function request(string $method, string $path, array $options): ResponseInterface
     {
         try {
-            $response = $this->client->get(self::SANDBOX_URL);
-
-            if($response->getStatusCode() !== self::SUCCESS_STATUS_CODE) {
-                throw new BarionConnectionException('Barion gateway is not available');
-            }
-        } catch(RequestException $e) {
-            throw new BarionConnectionException('Barion gateway is not available');
+            return $this->client->request($method, $path, $options);
+        } catch (GuzzleException $exception) {
+            throw new BarionConnectionException('Barion is not available: '.$exception->getMessage());
         }
     }
 
-    private function getRequestType(BarionGatewayEndpoint|BarionWalletEndpoint $endpoint): string
+    /**
+     * @throws BarionPaymentException
+     */
+    private function decode(ResponseInterface $response): array
     {
-        return $endpoint->isGetEndpoint() ? self::GET_TYPE : self::POST_TYPE;
+        $raw = (string) $response->getBody();
+        $data = json_decode($raw, true);
+        $data = is_array($data) ? $data : [];
+        $errors = $data['Errors'] ?? [];
+
+        if ($response->getStatusCode() >= 400 || ! empty($errors)) {
+            $error = $errors[0] ?? [];
+            $message = trim(($error['Title'] ?? '').(isset($error['Description']) ? ': '.$error['Description'] : ''), ': ');
+
+            throw (new BarionPaymentException(
+                $message !== '' ? $message : 'Barion request failed with HTTP '.$response->getStatusCode().'.',
+                $response->getStatusCode(),
+            ))->setErrors($errors)->setResponseData($data ?: ['raw' => $raw]);
+        }
+
+        return $data;
     }
 }

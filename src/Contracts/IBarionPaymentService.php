@@ -10,10 +10,10 @@ use Tomise\Barion\Services\PaymentClient;
 
 interface IBarionPaymentService
 {
-    public function startPayment(
-        Collection|Model $order,
-        Collection $items,
-    ): PaymentClient;
+    /**
+     * @param  Collection<int, Model>  $items
+     */
+    public function startPayment(Model $order, Collection $items): PaymentClient;
 
     public function startPaymentManual(): PaymentClient;
 }

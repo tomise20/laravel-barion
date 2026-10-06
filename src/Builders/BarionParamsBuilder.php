@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tomise\Barion\Builders;
 
 use Illuminate\Database\Eloquent\Model;
@@ -13,25 +15,32 @@ use Tomise\Barion\DataTransferObjects\PaymentTransactionDto;
 use Tomise\Barion\DataTransferObjects\TransactionItemDto;
 use Tomise\Barion\Exceptions\BarionPaymentException;
 
+/**
+ * Builds the Payment/Start request from the config, and optionally from an order model and its items
+ * (with $barion_casts: Barion field => model attribute).
+ */
 class BarionParamsBuilder
 {
     /**
-     * @var Collection<Model>
+     * Order fields that go to the request itself; "total" and "payee" go to the transaction.
+     */
+    private const ORDER_FIELDS = ['payment_request_id', 'payer_hint', 'order_number', 'phone_number', 'payer_phone_number', 'card_holder_name_hint'];
+
+    /**
+     * @var Collection<int, Model>
      */
     private Collection $items;
+
     private Model $order;
+
     private array $configData;
-    private array $transactions = [];
 
     public function __construct()
     {
-        $this->loadDataFromConfig();
+        $this->configData = (array) config('barion-gateway');
+        $this->items = new Collection;
     }
 
-	/**
-	 * @param Model $order
-	 * @return $this
-	 */
     public function setOrder(Model $order): BarionParamsBuilder
     {
         $this->order = $order;
@@ -46,26 +55,29 @@ class BarionParamsBuilder
         return $this;
     }
 
+    /**
+     * @throws BarionPaymentException
+     */
     public function build(): BarionPaymentDto
     {
-        $barionData = new BarionPaymentDto($this->configData['posKey']);
-        $barionData->setLocale($this->getLocale());
-        $barionData->setCurrency($this->getCurrency());
-
-        $this->setConfigData($barionData);
+        $barionData = $this->buildManual();
 
         $this->setDataFromOrder($barionData);
-
         $this->setTransactions($barionData);
 
         return $barionData;
     }
 
+    /**
+     * @throws BarionPaymentException
+     */
     public function buildManual(): BarionPaymentDto
     {
-        $barionData = new BarionPaymentDto($this->configData['posKey']);
-		$barionData->setLocale($this->getLocale());
+        $barionData = new BarionPaymentDto((string) Arr::get($this->configData, 'posKey', ''));
+        $barionData->setLocale($this->getLocale());
         $barionData->setCurrency($this->getCurrency());
+        // Barion needs a unique request id; it can be overwritten (or comes from the casts of the order).
+        $barionData->setPaymentRequestId((string) Str::uuid());
 
         $this->setConfigData($barionData);
 
@@ -74,127 +86,109 @@ class BarionParamsBuilder
 
     private function setConfigData(BarionPaymentDto $barionData): void
     {
-        $barionData->setPaymentType($this->configData['paymentType']);
-        $barionData->setPaymentWindow($this->configData['paymentWindow']);
-        $barionData->setGuestCheckout($this->configData['guestCheckout']);
-        $barionData->setFundingSources($this->configData['fundingSources']);
+        $barionData->setPaymentType((string) Arr::get($this->configData, 'paymentType', 'Immediate'));
+        $barionData->setPaymentWindow((string) Arr::get($this->configData, 'paymentWindow', '00:30:00'));
+        $barionData->setGuestCheckout(filter_var(Arr::get($this->configData, 'guestCheckout', true), FILTER_VALIDATE_BOOL));
+        $barionData->setFundingSources((array) Arr::get($this->configData, 'fundingSources', ['All']));
+        $barionData->setReservationPeriod(Arr::get($this->configData, 'reservationPeriod'));
+        $barionData->setDelayedCapturePeriod(Arr::get($this->configData, 'delayedCapturePeriod'));
 
-        if(Arr::get($this->configData, 'redirectUrl')) {
+        if (Arr::get($this->configData, 'redirectUrl')) {
             $barionData->setRedirectUrl($this->configData['redirectUrl']);
         }
 
-        if(Arr::get($this->configData, 'callbackUrl')) {
+        if (Arr::get($this->configData, 'callbackUrl')) {
             $barionData->setCallbackUrl($this->configData['callbackUrl']);
         }
     }
 
-	/**
-	 * @return void
-	 */
-    private function loadDataFromConfig(): void
-    {
-        $this->configData = config("barion-gateway");
-    }
-
     private function setDataFromOrder(BarionPaymentDto $barionData): void
     {
-        $baseDataKeys = ['payment_request_id', 'payer_hint', 'order_number', 'phone_number'];
+        foreach ($this->order->barion_casts as $key => $attribute) {
+            $value = $this->order->{$attribute};
 
-        foreach($this->order->barion_casts as $key => $value) {
-            if(in_array($key, $baseDataKeys)) {
-                $setter = "set".ucfirst(Str::camel($key));
-                $barionData->$setter($this->order->$value);
+            if (! in_array($key, self::ORDER_FIELDS, true) || blank($value)) {
+                continue;
             }
+
+            $setter = 'set'.ucfirst(Str::camel($key));
+            $barionData->{$setter}((string) $value);
         }
     }
 
     private function setTransactions(BarionPaymentDto $barionData): void
     {
+        $currency = $barionData->getCurrencyEnum();
         $totalField = Arr::get($this->order->barion_casts, 'total');
 
-        $transaction = (new PaymentTransactionDto())
+        $transaction = (new PaymentTransactionDto)
             ->setPostTransactionId($barionData->getPaymentRequestId())
             ->setPayee($this->getPayee())
-            ->setTotal($this->roundPrice($this->order->$totalField, $barionData->getCurrency()))
-            ->setItems($this->setTransactionItems());
+            ->setTotal($this->roundPrice($this->order->{$totalField}, $currency))
+            ->setItems($this->transactionItems($currency));
 
-        $this->transactions[] = $transaction->toArray();
-
-        $barionData->setTransactions($this->transactions);
+        $barionData->setTransactions([$transaction]);
     }
 
-    private function roundPrice(mixed $price, string $currency): int|float
+    private function roundPrice(mixed $price, Currency $currency): float
     {
-        if(Currency::Huf->value === $currency) {
-            return round($price);
-        }
-
-        return $price;
+        return round((float) $price, $currency->decimals());
     }
 
-	/**
-	 * @return Collection
-	 */
-    private function setTransactionItems(): Collection
+    /**
+     * @return Collection<int, TransactionItemDto>
+     */
+    private function transactionItems(Currency $currency): Collection
     {
-        $items = Collection::make();
-		foreach($this->items as $item) {
-            $barionItem = new TransactionItemDto();
-            foreach($item->barion_casts as $key => $value) {
-                $setter = "set".ucfirst(Str::camel($key));
-                $barionItem->$setter($item->$value);
+        return $this->items->map(function (Model $item) use ($currency): TransactionItemDto {
+            $barionItem = new TransactionItemDto;
+
+            foreach ($item->barion_casts as $key => $attribute) {
+                $value = $item->{$attribute};
+
+                if (in_array($key, ['unit_price', 'item_total'], true)) {
+                    $value = $this->roundPrice($value, $currency);
+                }
+
+                $barionItem->{'set'.ucfirst(Str::camel($key))}($value);
             }
 
-            $items->push($barionItem);
-        }
-
-		return $items;
+            return $barionItem;
+        })->values();
     }
 
+    /**
+     * @throws BarionPaymentException
+     */
     private function getPayee(): string
     {
-        if(in_array('payee', $this->order->barion_casts)) {
-            $payeeField = $this->order->barion_casts['payee'];
+        $payeeField = Arr::get($this->order->barion_casts, 'payee');
+        $payee = $payeeField ? $this->order->{$payeeField} : Arr::get($this->configData, 'payee');
 
-            return $this->order->$payeeField;
+        if (blank($payee)) {
+            throw new BarionPaymentException('The payee (the e-mail of your Barion wallet) is not set: BARION_PAYEE.');
         }
 
-        return Arr::get($this->configData, 'payee');
+        return (string) $payee;
     }
 
-	/**
-	 * @return Locale
-     * 
-     * @throws TypeError
-     * @throws ValueError
-	 */
+    /**
+     * @throws BarionPaymentException
+     */
     private function getLocale(): Locale
     {
-
         $locale = Arr::get($this->configData, 'locale');
 
-        if(!$locale) {
-            throw new BarionPaymentException('Locale is not settings!');
-        }
-
-
-		return Locale::from($locale);
+        return Locale::tryFrom((string) $locale) ?? throw new BarionPaymentException("Invalid Barion locale: {$locale}");
     }
 
-	/**
-	 * @return Currency
-     * 
-     * @throws TypeError
-     * @throws ValueError
-	 */
+    /**
+     * @throws BarionPaymentException
+     */
     private function getCurrency(): Currency
     {
         $currency = Arr::get($this->configData, 'currency');
 
-        if(!$currency) {
-            throw new BarionPaymentException('Currency is not settings!');
-        }
-
-        return Currency::from($currency);
+        return Currency::tryFrom((string) $currency) ?? throw new BarionPaymentException("Invalid Barion currency: {$currency}");
     }
 }

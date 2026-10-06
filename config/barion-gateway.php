@@ -6,23 +6,40 @@
 
 return [
 
-    /** Available environments: test, prod */
+    /** Available environments: test (sandbox), prod */
     'environment' => env('BARION_ENVIRONMENT', 'test'),
 
+    /** Immediate, Reservation or DelayedCapture (see Tomise\Barion\Enums\PaymentType) */
     'paymentType' => env('BARION_PAYMENT_TYPE', 'Immediate'),
+
+    /** How long the customer has to pay on the Barion page, "hh:mm:ss" */
     'paymentWindow' => env('BARION_PAYMENT_WINDOW', '00:30:00'),
+
+    /** Reservation payments: how long they can be finished, "d.hh:mm:ss", at most 1 year (unfinished ones are refunded) */
+    'reservationPeriod' => env('BARION_RESERVATION_PERIOD', '7.00:00:00'),
+
+    /** DelayedCapture payments: how long they can be captured, "d.hh:mm:ss", at most 7 days (21 days for Hungarian shops) */
+    'delayedCapturePeriod' => env('BARION_DELAYED_CAPTURE_PERIOD', '7.00:00:00'),
+
     'guestCheckout' => env('BARION_GUEST_CHECKOUT', true),
     'fundingSources' => ['All'],
 
-    'posKey' => env('BARION_POST_KEY'),
-    
+    /** The secret key of your Barion shop (POS); BARION_POST_KEY is the old, misspelled name */
+    'posKey' => env('BARION_POS_KEY', env('BARION_POST_KEY')),
+
     // Barion Wallet api key for wallet authentication
     'apiKey' => env('BARION_API_KEY'),
+
+    /** The e-mail address of the Barion wallet that receives the money */
     'payee' => env('BARION_PAYEE'),
+
     'redirectUrl' => env('BARION_REDIRECT_URL'),
     'callbackUrl' => env('BARION_CALLBACK_URL'),
 
-    // download path for wallet download. default path local disk/barion
+    /** Seconds to wait for Barion's answer */
+    'timeout' => env('BARION_TIMEOUT', 30),
+
+    // Folder of the wallet statement downloads on the default disk.
     'downloadPath' => null,
 
     'locale' => 'hu-HU',

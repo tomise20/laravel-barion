@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Tomise\Barion\Enums;
 
-enum TransactionStatus: string {
+enum TransactionStatus: string
+{
     case Prepared = 'Prepared';
     case Started = 'Started';
     case Succeeded = 'Succeeded';
@@ -18,6 +19,7 @@ enum TransactionStatus: string {
     case Deleted = 'Deleted';
     case Expired = 'Expired';
     case Authorized = 'Authorized';
+    case Reversed = 'Reversed';
     case InvalidPaymentRecord = 'InvalidPaymentRecord';
     case PaymentTimeOut = 'PaymentTimeOut';
     case InvalidPaymentStatus = 'InvalidPaymentStatus';

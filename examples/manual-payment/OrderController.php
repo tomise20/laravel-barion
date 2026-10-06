@@ -5,73 +5,93 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Tomise\Barion\DataTransferObjects\BarionPaymentDto;
+use Illuminate\Http\Request;
 use Tomise\Barion\DataTransferObjects\Currency;
 use Tomise\Barion\DataTransferObjects\Locale;
-use Tomise\Barion\Support\BarionGateway;
 use Tomise\Barion\DataTransferObjects\PaymentTransactionDto;
 use Tomise\Barion\DataTransferObjects\TransactionItemDto;
+use Tomise\Barion\DataTransferObjects\TransactionToRefundDto;
+use Tomise\Barion\Exceptions\BarionConnectionException;
+use Tomise\Barion\Exceptions\BarionPaymentException;
+use Tomise\Barion\Support\BarionGateway;
 
 class OrderController extends Controller
 {
     public function createOrder()
     {
-
-        // Get payment gateway.
-        $gateway = BarionGateway::createPaymentGateway();
-
         /**
-         * The following properties automatic assigned: POSKey,PaymentType,
-         * ReservationPeriod,PaymentWindow,GuestCheckOut,FundingSources, (RedirectUrl,CallbackUrl if configured in the config file)
-         */ 
-        $preparedPayment = $gateway->startPaymentManual();
-        
-        // Get the payment data with default data
-        $paymentDto = $preparedPayment->getPaymentData();
-        // or create a brand new paymentDto, but in this case you have to set every data! (not recommended)
-        $paymentDto = new BarionPaymentDto('EXAMPLE232');
+         * The following properties are assigned from the config: POSKey, PaymentType, ReservationPeriod,
+         * DelayedCapturePeriod, PaymentWindow, GuestCheckOut, FundingSources, RedirectUrl, CallbackUrl, Locale, Currency.
+         */
+        $preparedPayment = BarionGateway::createPaymentGateway()->startPaymentManual();
 
-        $paymentDto->setPaymentId('TEST-01');
-        $paymentDto->setTransactions([$this->createTransaction()]);
-        $paymentDto->setOrderNumber('ORDER-01');
+        $preparedPayment->getPaymentData()
+            // Your unique identifier of the payment (a UUID is generated when it is missing).
+            ->setPaymentRequestId('ORDER-01')
+            ->setOrderNumber('ORDER-01')
+            ->setPayerHint('customer@example.com')
+            ->setPayerPhoneNumber('+36 30 123 4567')
+            // Without these the configured defaults are used.
+            ->setLocale(Locale::Hu)
+            ->setCurrency(Currency::Huf)
+            ->addTransaction($this->createTransaction());
 
-        // If you don't set the locale and currency, the default values will be used from config
-        $paymentDto->setLocale(Locale::Hu);
-        $paymentDto->setCurrency(Currency::Huf);
-
-        // This step is not necessary, because the paymentDto is a reference
-        $preparedPayment->setPaymentData($paymentDto);
-
-        // Send data to Barion
-        $response = $preparedPayment->sendSinglePayment();
-
-        if($response->isSuccess) {
-            return response()->json(['success' => true, 'url' => $response->getGatewayUrl()]);
+        try {
+            $response = $preparedPayment->sendSinglePayment();
+        } catch (BarionPaymentException $exception) {
+            // Barion rejected the request: $exception->getErrors() has Barion's errors.
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        } catch (BarionConnectionException) {
+            return response()->json(['success' => false, 'message' => 'Barion is not available.'], 503);
         }
 
-        return response()->json(['success' => false, 'message' => $response->getErrorMessage()]);
+        // Store $response->getPaymentId() and $response->getTransactionId() with the order:
+        // the callback and the refund need them.
 
+        return response()->json(['success' => true, 'url' => $response->getGatewayUrl()]);
+    }
+
+    /**
+     * BARION_CALLBACK_URL: Barion only sends the PaymentId, the state has to be queried.
+     */
+    public function callback(Request $request)
+    {
+        $state = BarionGateway::createPaymentGateway()->startPaymentManual()->sendPaymentState((string) $request->input('paymentId'));
+
+        if ($state->isSucceeded()) {
+            // Mark the order with $state->paymentRequestId as paid.
+        }
+
+        return response()->noContent();
+    }
+
+    public function refund(string $paymentId, string $transactionId)
+    {
+        $response = BarionGateway::createPaymentGateway()->startPaymentManual()->sendRefund(
+            $paymentId,
+            [new TransactionToRefundDto($transactionId, 'Trs-01', 100, 'Partial refund')],
+            // The same key for a retried request: Barion refunds only once.
+            idempotencyKey: 'refund-ORDER-01-1',
+        );
+
+        return response()->json(['refunded' => $response->refundedTransactions->count()]);
     }
 
     private function createTransaction(): PaymentTransactionDto
     {
-        $transactionItems = collect();
-        $transactionItem = new TransactionItemDto();
-        $transactionItem->setName('Test product');
-        $transactionItem->setDescription('test description');
-        $transactionItem->setQuantity(1);
-        $transactionItem->setUnit('db');
-        $transactionItem->setUnitPrice(100.25);
-        // optional
-        $transactionItem->setImageUrl('http://example.com/image.jpg');
-        $transactionItems->push($transactionItem);
+        $transactionItem = (new TransactionItemDto)
+            ->setName('Test product')
+            ->setDescription('test description')
+            ->setQuantity(1)
+            ->setUnit('db')
+            ->setUnitPrice(100)
+            // optional
+            ->setImageUrl('https://example.com/image.jpg');
 
-        $transaction = new PaymentTransactionDto();
-        $transaction->setPostTransactionId('Trs-01');
-        $transaction->setPayee("test@example.com");
-        $transaction->setTotal(100.25);
-        $transaction->setItems($transactionItems);
-
-        return $transaction;
+        return (new PaymentTransactionDto)
+            ->setPostTransactionId('Trs-01')
+            ->setPayee('test@example.com')
+            ->setTotal(100)
+            ->setItems([$transactionItem]);
     }
 }

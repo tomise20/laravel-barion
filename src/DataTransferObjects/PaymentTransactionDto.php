@@ -1,23 +1,41 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tomise\Barion\DataTransferObjects;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Collection;
+use Tomise\Barion\Utils\Amount;
 
+/**
+ * A transaction of a payment (Barion: PaymentTransactionModel).
+ */
 class PaymentTransactionDto implements Arrayable
 {
     private string $postTransactionId;
     private string $payee;
     private float $total;
-    private ?string $comment;
+    private ?string $comment = null;
+
+    /**
+     * @var Collection<int, TransactionItemDto|array>
+     */
     private Collection $items;
+
+    public function __construct()
+    {
+        $this->items = new Collection;
+    }
 
     public function getPostTransactionId(): string
     {
         return $this->postTransactionId;
     }
 
+    /**
+     * Your own, unique identifier of the transaction (Barion: POSTransactionId).
+     */
     public function setPostTransactionId(string $id): PaymentTransactionDto
     {
         $this->postTransactionId = $id;
@@ -49,25 +67,44 @@ class PaymentTransactionDto implements Arrayable
         return $this;
     }
 
+    public function getComment(): ?string
+    {
+        return $this->comment;
+    }
+
+    public function setComment(?string $comment): PaymentTransactionDto
+    {
+        $this->comment = $comment;
+
+        return $this;
+    }
+
     public function getItems(): Collection
     {
         return $this->items;
     }
 
-    public function setItems(Collection $items): PaymentTransactionDto
+    /**
+     * @param  Collection<int, TransactionItemDto|array>|array<int, TransactionItemDto|array>  $items
+     */
+    public function setItems(Collection|array $items): PaymentTransactionDto
     {
-        $this->items = $items;
+        $this->items = Collection::make($items);
 
         return $this;
     }
 
     public function toArray(): array
     {
-        return [
+        return array_filter([
             'POSTransactionId' => $this->postTransactionId,
             'Payee' => $this->payee,
-            'Total' => $this->total,
-            'Items' => $this->items->toArray()
-        ];
+            'Total' => Amount::normalize($this->total),
+            'Comment' => $this->comment,
+            'Items' => $this->items
+                ->map(fn (TransactionItemDto|array $item): array => is_array($item) ? $item : $item->toArray())
+                ->values()
+                ->all(),
+        ], fn (mixed $value): bool => $value !== null);
     }
 }

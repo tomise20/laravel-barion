@@ -10,20 +10,17 @@ use Tomise\Barion\Support\BarionGateway;
 
 class OrderController extends Controller
 {
-    public function createOrder()
+    public function createOrder(Order $order)
     {
-        // Your order
-        $order = Order::find(1);
-        // Your order items
-        $items = $order->items;
+        // Build the Barion payment data from your models (both with $barion_casts).
+        $preparedPayment = BarionGateway::createPaymentGateway()->startPayment($order, $order->items);
 
-        // Get payment gateway.
-        $gateway = BarionGateway::createPaymentGateway();
+        // Optional extra data before sending, e.g. $preparedPayment->getPaymentData()->setBillingAddress($address);
 
-        // Build barion payment data you models
-        $preparedPayment = $gateway->startPayment($order, $items);
-        // Send data to Barion
+        // Throws BarionPaymentException (rejected) or BarionConnectionException (not reachable).
         $response = $preparedPayment->sendSinglePayment();
+
+        $order->update(['barion_payment_id' => $response->getPaymentId()]);
 
         return redirect($response->getGatewayUrl());
     }

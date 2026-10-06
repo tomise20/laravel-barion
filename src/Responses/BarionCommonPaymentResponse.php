@@ -6,26 +6,36 @@ namespace Tomise\Barion\Responses;
 
 use Illuminate\Support\Collection;
 use Tomise\Barion\Attributes\MapTo;
+use Tomise\Barion\Attributes\MapToCollection;
 use Tomise\Barion\DataTransferObjects\Response\ProcessedTransactionDto;
 use Tomise\Barion\Enums\BarionStatus;
 use Tomise\Barion\Utils\TransformHelper;
 
-class BarionCommonPaymentResponse {
-    public string $isSuccessful;
-    public string $paymentId;
-    public string $paymentRequestId;
+/**
+ * Response of FinishReservation, Capture and CancelAuthorization.
+ */
+class BarionCommonPaymentResponse
+{
+    public ?bool $isSuccessful = null;
+    public ?string $paymentId = null;
+    public ?string $paymentRequestId = null;
 
     #[MapTo(BarionStatus::class)]
-    public BarionStatus $status;
+    public ?BarionStatus $status = null;
+
     /**
-     * @var Collection<ProcessedTransactionDto>
+     * @var Collection<int, ProcessedTransactionDto>
      */
-    public readonly Collection $transactions;
+    #[MapToCollection(ProcessedTransactionDto::class)]
+    public Collection $transactions;
+
+    public function __construct()
+    {
+        $this->transactions = new Collection;
+    }
 
     public static function createFromArray(array $rawResponse): BarionCommonPaymentResponse
     {
-        $instance = new self();
-
-        return TransformHelper::transformArray($instance, $rawResponse);
+        return TransformHelper::transformArray(new self, $rawResponse);
     }
 }

@@ -27,7 +27,7 @@ class BarionWalletDto implements Arrayable
 
     public function __construct()
     {
-        $this->apiKey = config('barion-gateway.apiKey');
+        $this->apiKey = (string) config('barion-gateway.apiKey');
     }
 
     public function getApiKey(): string
@@ -167,21 +167,27 @@ class BarionWalletDto implements Arrayable
         return $this;
     }
 
+    /**
+     * The request data in Barion's field names. The API key goes in the x-api-key header, never in the data.
+     */
     public function toArray(): array
     {
         $result = [];
-        foreach ($this as $key => $value) {
-            if (is_object($value) && method_exists($value, 'toArray')) {
-                $result[$key] = $value->toArray();
-            } elseif (is_array($value)) {
-                $result[$key] = array_map(fn($item) => method_exists($item, 'toArray') ? $item->toArray() : $item, $value);
-            } elseif (is_object($value) && method_exists($value, 'getValue')) {
-                $result[$key] = $value->getValue();
-            } else if($value !== null) {
-                $result[$key] = $value;
+
+        foreach (get_object_vars($this) as $key => $value) {
+            if ($key === 'apiKey' || $value === null) {
+                continue;
             }
+
+            $result[ucfirst($key)] = match (true) {
+                $value instanceof \BackedEnum => $value->value,
+                $value instanceof \DateTimeInterface => $value->format(DATE_ATOM),
+                is_object($value) && method_exists($value, 'toArray') => $value->toArray(),
+                is_array($value) => array_map(fn (mixed $item): mixed => is_object($item) && method_exists($item, 'toArray') ? $item->toArray() : $item, $value),
+                default => $value,
+            };
         }
-        
+
         return $result;
     }
 }

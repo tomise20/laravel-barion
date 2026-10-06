@@ -1,42 +1,52 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tomise\Barion\DataTransferObjects;
 
+use BackedEnum;
 use Illuminate\Contracts\Support\Arrayable;
-use Tomise\Barion\DataTransferObjects\Currency;
-use Tomise\Barion\DataTransferObjects\Locale;
+use Illuminate\Support\Collection;
+use Tomise\Barion\Enums\PaymentType;
 use Tomise\Barion\Enums\RecurrenceType;
 
-class BarionPaymentDto implements Arrayable {
-    private string $paymentType;
-    private string $reservationPeriod;
-    private string $paymentWindow;
+/**
+ * The request of Payment/Start (v2). The POSKey is sent in the x-pos-key header, not in the body.
+ */
+class BarionPaymentDto implements Arrayable
+{
+    private string $paymentType = 'Immediate';
+    private ?string $reservationPeriod = null;
+    private ?string $delayedCapturePeriod = null;
+    private string $paymentWindow = '00:30:00';
     private bool $guestCheckOut = true;
-    private array $fundingSources;
-    private string $paymentRequestId;
+    private array $fundingSources = ['All'];
+    private ?string $paymentRequestId = null;
     private ?string $payerHint = null;
     private ?string $cardHolderNameHint = null;
-    private ?int $recurrenceType = null;
+    private bool $initiateRecurrence = false;
+    private ?string $recurrenceId = null;
+    private ?string $recurrenceType = null;
     private ?string $traceId = null;
     private ?AddressDto $shippingAddress = null;
-    private string $redirectUrl;
-    private string $callbackUrl;
-    private array $transactions;
-    private string $orderNumber;
-    private Locale $locale;
-    private Currency $currency;
+    private ?AddressDto $billingAddress = null;
+    private ?string $redirectUrl = null;
+    private ?string $callbackUrl = null;
+    private array $transactions = [];
+    private ?string $orderNumber = null;
+    private Locale $locale = Locale::Hu;
+    private Currency $currency = Currency::Huf;
     private ?string $payerPhoneNumber = null;
     private ?string $payerWorkPhoneNumber = null;
     private ?string $payerHomePhoneNumber = null;
-    private string $phoneNumber;
-    private AddressDto $billingAddress;
     private ?PurchaseInformation $purchaseInformation = null;
 
+    /**
+     * Not part of Payment/Start: kept for the follow-up requests of the same payment.
+     */
     private ?string $paymentId = null;
 
-    public function __construct(private readonly string $posKey)
-    {
-    }
+    public function __construct(private readonly string $posKey) {}
 
     public function getPosKey(): string
     {
@@ -48,23 +58,39 @@ class BarionPaymentDto implements Arrayable {
         return $this->paymentType;
     }
 
-    public function setPaymentType(string $paymentType): BarionPaymentDto
-
+    public function setPaymentType(string|PaymentType $paymentType): BarionPaymentDto
     {
-        $this->paymentType = $paymentType;
+        $this->paymentType = $paymentType instanceof PaymentType ? $paymentType->value : $paymentType;
 
         return $this;
     }
 
-    public function getReservationPeriod(): string
+    public function getReservationPeriod(): ?string
     {
-       return $this->reservationPeriod;
+        return $this->reservationPeriod;
     }
 
-    public function setReservationPeriod(string $reservationPeriod): BarionPaymentDto
-
+    /**
+     * How long a Reservation payment can be finished, "d.hh:mm:ss" (e.g. "7.00:00:00"); required for Reservation.
+     */
+    public function setReservationPeriod(?string $reservationPeriod): BarionPaymentDto
     {
         $this->reservationPeriod = $reservationPeriod;
+
+        return $this;
+    }
+
+    public function getDelayedCapturePeriod(): ?string
+    {
+        return $this->delayedCapturePeriod;
+    }
+
+    /**
+     * How long a DelayedCapture payment can be captured, "d.hh:mm:ss" (at most 7 days); required for DelayedCapture.
+     */
+    public function setDelayedCapturePeriod(?string $delayedCapturePeriod): BarionPaymentDto
+    {
+        $this->delayedCapturePeriod = $delayedCapturePeriod;
 
         return $this;
     }
@@ -75,7 +101,6 @@ class BarionPaymentDto implements Arrayable {
     }
 
     public function setPaymentWindow(string $paymentWindow): BarionPaymentDto
-
     {
         $this->paymentWindow = $paymentWindow;
 
@@ -87,8 +112,12 @@ class BarionPaymentDto implements Arrayable {
         return $this->guestCheckOut;
     }
 
-    public function setGuestCheckout(bool $guestCheckOut): BarionPaymentDto
+    public function isGuestCheckOut(): bool
+    {
+        return $this->guestCheckOut;
+    }
 
+    public function setGuestCheckout(bool $guestCheckOut): BarionPaymentDto
     {
         $this->guestCheckOut = $guestCheckOut;
 
@@ -101,20 +130,18 @@ class BarionPaymentDto implements Arrayable {
     }
 
     public function setFundingSources(array $fundingSources): BarionPaymentDto
-
     {
         $this->fundingSources = $fundingSources;
 
         return $this;
     }
 
-    public function getPaymentRequestId(): string
+    public function getPaymentRequestId(): ?string
     {
         return $this->paymentRequestId;
     }
 
     public function setPaymentRequestId(string $paymentRequestId): BarionPaymentDto
-
     {
         $this->paymentRequestId = $paymentRequestId;
 
@@ -126,34 +153,31 @@ class BarionPaymentDto implements Arrayable {
         return $this->payerHint;
     }
 
-    public function setPayerHint(string $payerHint): BarionPaymentDto
-
+    public function setPayerHint(?string $payerHint): BarionPaymentDto
     {
         $this->payerHint = $payerHint;
 
         return $this;
     }
 
-    public function getRedirectUrl(): string
+    public function getRedirectUrl(): ?string
     {
         return $this->redirectUrl;
     }
 
     public function setRedirectUrl(string $url): BarionPaymentDto
-
     {
         $this->redirectUrl = $url;
 
         return $this;
     }
 
-    public function getCallbackUrl(): string
+    public function getCallbackUrl(): ?string
     {
         return $this->callbackUrl;
     }
 
     public function setCallbackUrl(string $url): BarionPaymentDto
-
     {
         $this->callbackUrl = $url;
 
@@ -165,25 +189,33 @@ class BarionPaymentDto implements Arrayable {
         return $this->transactions;
     }
 
-    public function setTransactions(array $transactions): BarionPaymentDto
-
+    /**
+     * @param  array<int, PaymentTransactionDto|array>|Collection<int, PaymentTransactionDto|array>  $transactions
+     */
+    public function setTransactions(array|Collection $transactions): BarionPaymentDto
     {
-        $this->transactions = $transactions;
+        $this->transactions = Collection::make($transactions)->values()->all();
 
         return $this;
     }
 
-    public function getOrderNumber(): string
+    public function addTransaction(PaymentTransactionDto|array $transaction): BarionPaymentDto
+    {
+        $this->transactions[] = $transaction;
+
+        return $this;
+    }
+
+    public function getOrderNumber(): ?string
     {
         return $this->orderNumber;
     }
 
     public function setOrderNumber(string $orderNumber): BarionPaymentDto
-
     {
         $this->orderNumber = $orderNumber;
 
-        if(config('barion-gateway.sync_payment_request_id')) {
+        if (config('barion-gateway.sync_payment_request_id')) {
             $this->setPaymentRequestId($orderNumber);
         }
 
@@ -196,7 +228,6 @@ class BarionPaymentDto implements Arrayable {
     }
 
     public function setLocale(Locale $locale): BarionPaymentDto
-
     {
         $this->locale = $locale;
 
@@ -208,34 +239,40 @@ class BarionPaymentDto implements Arrayable {
         return $this->currency->value;
     }
 
-    public function setCurrency(Currency $currency): BarionPaymentDto
+    public function getCurrencyEnum(): Currency
+    {
+        return $this->currency;
+    }
 
+    public function setCurrency(Currency $currency): BarionPaymentDto
     {
         $this->currency = $currency;
 
         return $this;
     }
 
-    public function getPhoneNumber(): string
+    /**
+     * @deprecated Barion has no PhoneNumber field, use setPayerPhoneNumber().
+     */
+    public function getPhoneNumber(): ?string
     {
-        return $this->phoneNumber;
+        return $this->payerPhoneNumber;
     }
 
-    public function setPhoneNumber(string $phoneNumber): BarionPaymentDto
-
+    /**
+     * @deprecated Barion has no PhoneNumber field, use setPayerPhoneNumber().
+     */
+    public function setPhoneNumber(?string $phoneNumber): BarionPaymentDto
     {
-        $this->phoneNumber = $phoneNumber;
-
-        return $this;
+        return $this->setPayerPhoneNumber($phoneNumber);
     }
 
-    public function getBillingAddress(): AddressDto
+    public function getBillingAddress(): ?AddressDto
     {
         return $this->billingAddress;
     }
 
-    public function setBillingAddress(AddressDto $billingAddress): BarionPaymentDto
-
+    public function setBillingAddress(?AddressDto $billingAddress): BarionPaymentDto
     {
         $this->billingAddress = $billingAddress;
 
@@ -253,128 +290,192 @@ class BarionPaymentDto implements Arrayable {
 
         return $this;
     }
-    
-    public function isGuestCheckOut(): bool
-    {
-        return $this->guestCheckOut;
-    }
-    
+
     public function getCardHolderNameHint(): ?string
     {
         return $this->cardHolderNameHint;
     }
-    
+
     public function setCardHolderNameHint(?string $cardHolderNameHint): BarionPaymentDto
     {
         $this->cardHolderNameHint = $cardHolderNameHint;
-        
-        return $this;
-    }
-    
-    public function getRecurrenceType(): ?int
-    {
-        return $this->recurrenceType;
-    }
-    
-    public function setRecurrenceType(int|RecurrenceType $recurrenceType): BarionPaymentDto
-    {
-        if($recurrenceType instanceof RecurrenceType) {
-            $recurrenceType = $recurrenceType->value;
-        } else {
-            $this->recurrenceType = $recurrenceType;
-        }
 
         return $this;
     }
-    
+
+    public function getInitiateRecurrence(): bool
+    {
+        return $this->initiateRecurrence;
+    }
+
+    /**
+     * True on the first payment of a recurring (token) payment, paid by the customer on the Barion page.
+     */
+    public function setInitiateRecurrence(bool $initiateRecurrence): BarionPaymentDto
+    {
+        $this->initiateRecurrence = $initiateRecurrence;
+
+        return $this;
+    }
+
+    public function getRecurrenceId(): ?string
+    {
+        return $this->recurrenceId;
+    }
+
+    /**
+     * Your identifier of the saved card (token); the later payments with the same id are charged without the customer.
+     */
+    public function setRecurrenceId(?string $recurrenceId): BarionPaymentDto
+    {
+        $this->recurrenceId = $recurrenceId;
+
+        return $this;
+    }
+
+    public function getRecurrenceType(): ?string
+    {
+        return $this->recurrenceType;
+    }
+
+    public function setRecurrenceType(string|RecurrenceType|null $recurrenceType): BarionPaymentDto
+    {
+        $this->recurrenceType = $recurrenceType instanceof RecurrenceType ? $recurrenceType->value : $recurrenceType;
+
+        return $this;
+    }
+
     public function getTraceId(): ?string
     {
         return $this->traceId;
     }
-    
+
+    /**
+     * The TraceId of the first payment of a recurring payment, required for the merchant initiated ones.
+     */
     public function setTraceId(?string $traceId): BarionPaymentDto
     {
         $this->traceId = $traceId;
 
         return $this;
     }
-    
+
     public function getShippingAddress(): ?AddressDto
     {
         return $this->shippingAddress;
     }
-    
+
     public function setShippingAddress(?AddressDto $shippingAddress): BarionPaymentDto
     {
         $this->shippingAddress = $shippingAddress;
 
         return $this;
     }
-    
+
     public function getPayerPhoneNumber(): ?string
     {
         return $this->payerPhoneNumber;
     }
-    
+
+    /**
+     * Barion expects digits only with the country code, e.g. "36301234567"; other characters are removed.
+     */
     public function setPayerPhoneNumber(?string $payerPhoneNumber): BarionPaymentDto
     {
-        $this->payerPhoneNumber = $payerPhoneNumber;
+        $this->payerPhoneNumber = self::normalizePhone($payerPhoneNumber);
 
         return $this;
     }
-    
+
     public function getPayerWorkPhoneNumber(): ?string
     {
         return $this->payerWorkPhoneNumber;
     }
-    
+
     public function setPayerWorkPhoneNumber(?string $payerWorkPhoneNumber): BarionPaymentDto
     {
-        $this->payerWorkPhoneNumber = $payerWorkPhoneNumber;
+        $this->payerWorkPhoneNumber = self::normalizePhone($payerWorkPhoneNumber);
 
         return $this;
     }
-    
+
     public function getPayerHomePhoneNumber(): ?string
     {
         return $this->payerHomePhoneNumber;
     }
-    
+
     public function setPayerHomePhoneNumber(?string $payerHomePhoneNumber): BarionPaymentDto
     {
-        $this->payerHomePhoneNumber = $payerHomePhoneNumber;
+        $this->payerHomePhoneNumber = self::normalizePhone($payerHomePhoneNumber);
 
         return $this;
     }
 
-    public function getPurchaseInformation(): PurchaseInformation
+    public function getPurchaseInformation(): ?PurchaseInformation
     {
         return $this->purchaseInformation;
     }
 
-    public function setPurchaseInformation(PurchaseInformation $purchaseInformation): BarionPaymentDto
+    public function setPurchaseInformation(?PurchaseInformation $purchaseInformation): BarionPaymentDto
     {
         $this->purchaseInformation = $purchaseInformation;
 
         return $this;
     }
 
+    /**
+     * The JSON body of Payment/Start, in Barion's field names.
+     */
     public function toArray(): array
     {
-        $result = [];
-        foreach ($this as $key => $value) {
-            if (is_object($value) && method_exists($value, 'toArray')) {
-                $result[$key] = $value->toArray();
-            } elseif (is_array($value)) {
-                $result[$key] = array_map(fn($item) => method_exists($item, 'toArray') ? $item->toArray() : $item, $value);
-            } elseif (is_object($value) && method_exists($value, 'getValue')) {
-                $result[$key] = $value->getValue();
-            } elseif($value !== null) {
-                $result[$key] = $value;
-            }
-        }
-        
-        return $result;
+        $data = [
+            'PaymentType' => $this->paymentType,
+            'ReservationPeriod' => $this->paymentType === PaymentType::Reservation->value ? $this->reservationPeriod : null,
+            'DelayedCapturePeriod' => $this->paymentType === PaymentType::DelayedCapture->value ? $this->delayedCapturePeriod : null,
+            'PaymentWindow' => $this->paymentWindow,
+            'GuestCheckOut' => $this->guestCheckOut,
+            'FundingSources' => $this->fundingSources,
+            'PaymentRequestId' => $this->paymentRequestId,
+            'PayerHint' => $this->payerHint,
+            'CardHolderNameHint' => $this->cardHolderNameHint,
+            'InitiateRecurrence' => $this->initiateRecurrence,
+            'RecurrenceId' => $this->recurrenceId,
+            'RecurrenceType' => $this->recurrenceType,
+            'TraceId' => $this->traceId,
+            'RedirectUrl' => $this->redirectUrl,
+            'CallbackUrl' => $this->callbackUrl,
+            'Transactions' => array_map(fn (mixed $transaction): mixed => self::serialize($transaction), $this->transactions),
+            'OrderNumber' => $this->orderNumber,
+            'ShippingAddress' => self::serialize($this->shippingAddress),
+            'BillingAddress' => self::serialize($this->billingAddress),
+            'Locale' => $this->locale->value,
+            'Currency' => $this->currency->value,
+            'PayerPhoneNumber' => $this->payerPhoneNumber,
+            'PayerWorkPhoneNumber' => $this->payerWorkPhoneNumber,
+            'PayerHomePhoneNumber' => $this->payerHomePhoneNumber,
+            'PurchaseInformation' => self::serialize($this->purchaseInformation),
+        ];
+
+        return array_filter($data, fn (mixed $value): bool => $value !== null);
     }
 
+    private static function serialize(mixed $value): mixed
+    {
+        return match (true) {
+            $value instanceof BackedEnum => $value->value,
+            is_object($value) && method_exists($value, 'toArray') => $value->toArray(),
+            default => $value,
+        };
+    }
+
+    private static function normalizePhone(?string $phone): ?string
+    {
+        if ($phone === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', $phone);
+
+        return $digits === '' ? null : $digits;
+    }
 }
