@@ -10,6 +10,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Psr\Http\Message\ResponseInterface;
+use Ramsey\Uuid\Uuid;
 use Tomise\Barion\DataTransferObjects\BarionWalletDto;
 use Tomise\Barion\Enums\BarionGatewayEndpoint;
 use Tomise\Barion\Enums\BarionWalletEndpoint;
@@ -35,7 +36,7 @@ class BarionAdapter
     public function __construct(?ClientInterface $client = null)
     {
         $this->client = $client ?? new Client([
-            'base_uri' => self::isSandbox() ? self::SANDBOX_URL : self::PRODUCTION_URL,
+            'base_uri' => config('barion-gateway.apiUrl') ?: (self::isSandbox() ? self::SANDBOX_URL : self::PRODUCTION_URL),
             'timeout' => (float) config('barion-gateway.timeout', 30),
             'connect_timeout' => 10,
             // Error responses are handled here, with Barion's own error messages.
@@ -53,11 +54,26 @@ class BarionAdapter
     }
 
     /**
+     * Barion accepts only a GUID as Idempotency-Key ("Invalid Idempotency-Key header" otherwise). Other keys become a
+     * name based (v5) UUID, so the same key always gives the same GUID.
+     */
+    public static function idempotencyGuid(string $key): string
+    {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $key)) {
+            return $key;
+        }
+
+        return Uuid::uuid5(Uuid::NAMESPACE_URL, 'barion-idempotency:'.$key)->toString();
+    }
+
+    /**
      * The Barion payment page of a payment (when the response has no GatewayUrl).
      */
     public static function gatewayUrl(string $paymentId): string
     {
-        return (self::isSandbox() ? self::SANDBOX_GATEWAY_URL : self::PRODUCTION_GATEWAY_URL).'?Id='.rawurlencode($paymentId);
+        $url = config('barion-gateway.gatewayUrl') ?: (self::isSandbox() ? self::SANDBOX_GATEWAY_URL : self::PRODUCTION_GATEWAY_URL);
+
+        return $url.'?Id='.rawurlencode($paymentId);
     }
 
     /**
@@ -65,7 +81,7 @@ class BarionAdapter
      *
      * @param  array<string, mixed>  $body  JSON body of POST requests
      * @param  array<string, string>  $pathParameters  e.g. ['paymentId' => '...'] for PaymentState
-     * @param  string|null  $idempotencyKey  makes a retried POST safe (Barion runs it only once)
+     * @param  string|null  $idempotencyKey  makes a retried POST safe (Barion runs it only once); any text, sent as a GUID
      *
      * @throws BarionPaymentException when Barion rejects the request
      * @throws BarionConnectionException when Barion cannot be reached
@@ -79,7 +95,7 @@ class BarionAdapter
     ): array {
         $options = ['headers' => array_filter([
             'x-pos-key' => $posKey,
-            'Idempotency-Key' => $idempotencyKey,
+            'Idempotency-Key' => $idempotencyKey === null ? null : self::idempotencyGuid($idempotencyKey),
         ])];
 
         if ($endpoint->isGetEndpoint()) {
@@ -164,6 +180,8 @@ class BarionAdapter
         if ($response->getStatusCode() >= 400 || ! empty($errors)) {
             $error = $errors[0] ?? [];
             $message = trim(($error['Title'] ?? '').(isset($error['Description']) ? ': '.$error['Description'] : ''), ': ');
+            // Requests refused before validation (e.g. a bad header) come as {"Message": "..."}.
+            $message = $message !== '' ? $message : trim((string) ($data['Message'] ?? ''));
 
             throw (new BarionPaymentException(
                 $message !== '' ? $message : 'Barion request failed with HTTP '.$response->getStatusCode().'.',

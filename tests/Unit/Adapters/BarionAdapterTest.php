@@ -33,7 +33,7 @@ class BarionAdapterTest extends BaseUnitTest
         $this->assertSame('POST', $request->getMethod());
         $this->assertSame('/v2/Payment/Start', $request->getUri()->getPath());
         $this->assertSame('test-pos-key', $request->getHeaderLine('x-pos-key'));
-        $this->assertSame('key-1', $request->getHeaderLine('Idempotency-Key'));
+        $this->assertSame(BarionAdapter::idempotencyGuid('key-1'), $request->getHeaderLine('Idempotency-Key'));
         $this->assertSame(['PaymentType' => 'Immediate'], $this->lastRequestBody());
         $this->assertSame('pay-123', $response['PaymentId']);
     }
@@ -118,5 +118,34 @@ class BarionAdapterTest extends BaseUnitTest
             'sandbox' => ['test', 'https://secure.test.barion.com/Pay?Id=pay-123'],
             'production' => ['prod', 'https://secure.barion.com/Pay?Id=pay-123'],
         ];
+    }
+
+    public function test_idempotencyGuid_keepsGuidAndConvertsOtherKeysStably(): void
+    {
+        // Arrange
+        $guid = '0f8fad5b-d9cb-469f-a165-70867728950e';
+
+        // Act
+        $converted = BarionAdapter::idempotencyGuid('refund-ORDER-1-1');
+
+        // Assert
+        $this->assertSame($guid, BarionAdapter::idempotencyGuid($guid));
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $converted);
+        $this->assertSame($converted, BarionAdapter::idempotencyGuid('refund-ORDER-1-1'));
+        $this->assertNotSame($converted, BarionAdapter::idempotencyGuid('refund-ORDER-1-2'));
+    }
+
+    public function test_send_usesBarionMessageWhenThereAreNoErrors(): void
+    {
+        // Arrange
+        $this->barion->append(new Response(400, [], json_encode(['Message' => 'Invalid Idempotency-Key header'])));
+        $adapter = $this->app->make(BarionAdapter::class);
+
+        // Assert
+        $this->expectException(BarionPaymentException::class);
+        $this->expectExceptionMessage('Invalid Idempotency-Key header');
+
+        // Act
+        $adapter->send(BarionGatewayEndpoint::Refound, 'test-pos-key', ['PaymentId' => 'pay-123']);
     }
 }

@@ -165,7 +165,7 @@ class PaymentClientTest extends BaseUnitTest
 
         // Assert
         $this->assertSame('/v2/Payment/Refund', $this->lastRequest()->getUri()->getPath());
-        $this->assertSame('refund-ORDER-1-1', $this->lastRequest()->getHeaderLine('Idempotency-Key'));
+        $this->assertSame(BarionAdapter::idempotencyGuid('refund-ORDER-1-1'), $this->lastRequest()->getHeaderLine('Idempotency-Key'));
         $this->assertSame([
             'PaymentId' => 'pay-123',
             'TransactionsToRefund' => [['TransactionId' => 'trx-1', 'POSTransactionId' => 'ORDER-1', 'AmountToRefund' => 5000, 'Comment' => 'Partial refund']],

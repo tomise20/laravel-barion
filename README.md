@@ -47,6 +47,8 @@ BARION_RESERVATION_PERIOD=7.00:00:00     # Reservation: time to finish the payme
 BARION_DELAYED_CAPTURE_PERIOD=7.00:00:00 # DelayedCapture: time to capture (max. 7 days, 21 for Hungarian shops)
 BARION_GUEST_CHECKOUT=true
 BARION_TIMEOUT=30                        # seconds
+BARION_API_URL=                          # override of the API address, e.g. a local fake server for tests
+BARION_GATEWAY_URL=                      # override of the payment page address (".../Pay")
 
 # only for wallet operations
 BARION_API_KEY=<your wallet API key>
@@ -167,7 +169,7 @@ use Tomise\Barion\DataTransferObjects\TransactionToRefundDto;
 $response = BarionGateway::createPaymentGateway()->startPaymentManual()->sendRefund(
     $paymentId,
     [new TransactionToRefundDto($transactionId, 'ORDER-1001', 5000, 'Partial refund')],
-    idempotencyKey: 'refund-ORDER-1001-1', // a retried request with the same key is refunded only once
+    idempotencyKey: 'refund-ORDER-1001-1', // a retried request with the same key is refunded only once (sent as a GUID)
 );
 
 $response->refundedTransactions; // Collection of RefundedTransactionDto

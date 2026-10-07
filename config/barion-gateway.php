@@ -39,6 +39,10 @@ return [
     /** Seconds to wait for Barion's answer */
     'timeout' => env('BARION_TIMEOUT', 30),
 
+    /** Overrides of the API and the payment page address, e.g. a local fake Barion server for tests (empty: by environment) */
+    'apiUrl' => env('BARION_API_URL'),
+    'gatewayUrl' => env('BARION_GATEWAY_URL'),
+
     // Folder of the wallet statement downloads on the default disk.
     'downloadPath' => null,
 
